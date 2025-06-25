@@ -9,3 +9,6 @@ https://docs.opencv.org/3.1.0/d3/db4/tutorial_py_watershed.html
 2. Graph-cutなどを使って手動でアノテーションをしてみる
    その時にwatershed 法のアルゴリズムを参考にする?
 3. 再度watershed 法に戻って2での内容を参考にアルゴリズムを作る
+
+# 20250625
+watershedについてアルゴリズムを理解した。自作のwatershedアルゴリズムを作ってみる?
