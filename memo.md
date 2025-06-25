@@ -45,10 +45,17 @@
   画像中の連結成分をラベリングする
   - binary_iname: 入力画像(二値化画像、背景が0、物体が255)
   - 出力: 連結成分の数、ラベリングされた画像
-- cv.watershed(image, markers)
+- cv2.watershed(image, markers)
   watershedアルゴリズムより境界線を引く
   - image: 入力画像
   - markers: imageに対するマーカー画像
+- cv2.Laplacian(img, cv2.CV_64F)
+  ラプラシアンフィルタを用いて、エッジを検出する。さらに　cv2.CV_64Fによって64ビット浮動小数点にして出力される
+  - ラプラシアンフィルタ -> 2階微分
+  - img: ラプラシアンフィルタを適用する画像
+  - cv2.CV_64F: 出力する形式の指定(cv2.CV_32Fなどもあり)
+- cv2.convertScaleAbs(img)
+  データを8ビットの正整数に変換する
 
 ## watershedアルゴリズムについて(概要)
 watershedアルゴリズムは以下の手順で入力画像に境界を設ける
