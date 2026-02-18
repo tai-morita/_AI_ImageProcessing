@@ -54,6 +54,11 @@ def count_label(coords, arr2d_label):
     label_count.discard(-1)
     return label_count
 
+def push_neighbors_to_queue(coords, arr2d_label, arr2d_height, list_queue):
+    # 近傍かつミラベルの点を優先度付きキューに入れる
+    for coord in coords:
+        if arr2d_label[coord] == 0: # MASKのみキューに入れる
+            heapq.heappush(list_queue, (arr2d_height[coord], coord))
 
 def argorism_main(array2d, seed_coords):
     list_queue = [] # (height, width)の配列
@@ -63,10 +68,10 @@ def argorism_main(array2d, seed_coords):
     for seed in seed_coords:
         arr2d_label[seed] = value_label
         value_label += 1
-    # 前景を優先度付きキューに入れる
-    for height in range(array2d.shape[0]):
-        for width in range(array2d.shape[1]):
-            heapq.heappush(list_queue, (array2d[height, width], (height, width)))
+    # ラベリングされた点(最初なのでseed)の近傍を優先度付きキューに入れる
+    for seed in seed_coords:
+        coords_neighbors = neighbors_lin(seed, arr2d_label.shape, neibors=8)
+        push_neighbors_to_queue(coords_neighbors, arr2d_label, array2d, list_queue)
 
     while list_queue:
         coord_p = heapq.heappop(list_queue)[1]
@@ -83,6 +88,8 @@ def argorism_main(array2d, seed_coords):
         elif len(value_label_count) == 1:
             # 近傍が既ラベル1種のみ -> pをそのラベルにする
             arr2d_label[coord_p] = value_label_count.pop()
+            # ラベリングしたらその点の近傍をキューに入れる
+            push_neighbors_to_queue(coords_neighbors, arr2d_label, array2d, list_queue)
         elif len(value_label_count) > 1:
             # 近傍が複数の既ラベル or WSHED -> pをWSHEDにする
             arr2d_label[coord_p] = -1 # WSHEDは-1で表す
@@ -101,6 +108,7 @@ def origianl_watershed_2d():
 
     height_map, seed_coords, markers = generate_height_map_5basins(H=100, W=100, seed=2026)
     print("height_map shape:", height_map.shape, height_map.dtype)
+    np.savetxt('./study/test/Output/watershed_original.csv', np.array(height_map), delimiter=',', fmt='%d')
     array2d_label = argorism_main(np.array(height_map), seed_coords)
     return array2d_label
 
@@ -108,6 +116,5 @@ if __name__ == "__main__":
     array2d_label = origianl_watershed_2d()
     print(array2d_label)
     # CSVに出力
-    with open('./test/Output/watershed_result.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerows(array2d_label)
+    np.savetxt('./study/test/Output/watershed_result.csv', array2d_label, delimiter=',', fmt='%d')
+    print("CSVに出力しました: ./study/test/Output/watershed_result.csv")
