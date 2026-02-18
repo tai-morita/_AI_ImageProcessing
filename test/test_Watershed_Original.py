@@ -1,0 +1,113 @@
+import numpy as np
+import heapq
+import csv
+from . test_set_array import generate_height_map_5basins
+
+# 自作のwatershed実装
+"""
+2d
+アルゴリズム
+引数: 2d image, seed(分類したいオブジェクトの極小に近い点)
+1. 前景、背景を二値化する
+2. 前景の距離変換を行う
+3. 距離の小さい順に以下の処理を行う 距離=d, 初回のみ0を実行, 以降は1からループ
+    0) seed点をラベリングする: coords=[height, width, label]とした配列にする
+    while q:
+        for d
+            1) 距離dの点を全てキューに入れる
+            2) qから点pを取り出す
+            3) pの近傍を巡回(8近傍)
+            4) それぞれの状態に応じて、以下の処理を行う
+                if 近傍が既ラベル1種のみ
+                    pをそのラベルにする
+                elif 近傍が複数の既ラベル or WSHED
+                    pをWSHEDにする
+                elif 近傍が未処理のMASKのみ
+                    pを再度キューに入れる(次の距離層で処理するため)
+"""
+
+def neighbors_lin(coords, arr_shape, neibors=8):
+    # 8近傍の座標を返す
+    # ただし、画像の範囲外の座標は返さない (1ライン増やすのとどっちがのであろう)
+    height = coords[0]
+    width = coords[1]
+    if neibors == 4:
+        coords_neibor = [(height-1,  width), (height+1, width), 
+                (height, width-1), (height, width+1)]
+    elif neibors == 8:
+        coords_neibor = [(height-1, width-1), (height-1, width), 
+                (height-1, width+1), (height, width-1), 
+                (height, width+1), (height+1, width-1), 
+                (height+1, width), (height+1, width+1)]
+    # 画像の範囲外の座標は返さない
+    coords_neibor = [coord for coord in coords_neibor if 0 <= coord[0] < arr_shape[0] and 0 <= coord[1] < arr_shape[1]]
+    return coords_neibor
+
+def count_label(coords, arr2d_label):
+    # 座標のリスト内にラベルが何種類あるか調べる
+    label_count = set()
+    for coord in coords:
+        label_count.add(arr2d_label[coord])
+    # 0はMASKを表すので、0は除外する
+    # -1も除外する
+    label_count.discard(0)
+    label_count.discard(-1)
+    return label_count
+
+
+def argorism_main(array2d, seed_coords):
+    list_queue = [] # (height, width)の配列
+    arr2d_label = np.zeros_like(array2d) # ラベリング結果を格納する配列
+    # seed点をラベリングする
+    value_label = 1
+    for seed in seed_coords:
+        arr2d_label[seed] = value_label
+        value_label += 1
+    # 前景を優先度付きキューに入れる
+    for height in range(array2d.shape[0]):
+        for width in range(array2d.shape[1]):
+            heapq.heappush(list_queue, (array2d[height, width], (height, width)))
+
+    while list_queue:
+        coord_p = heapq.heappop(list_queue)[1]
+        if True:
+            # テスト用: seed点は処理しない
+            if arr2d_label[coord_p] != 0:
+                continue
+        # 近傍を巡回
+        coords_neighbors = neighbors_lin(coord_p, arr2d_label.shape, neibors=8)
+        value_label_count = count_label(coords_neighbors, arr2d_label)
+        if value_label_count == set():
+            # 近傍が未処理のMASKのみ -> pを再度キューに入れる(次の距離層で処理するため)
+            heapq.heappush(list_queue, (array2d[coord_p], coord_p))
+        elif len(value_label_count) == 1:
+            # 近傍が既ラベル1種のみ -> pをそのラベルにする
+            arr2d_label[coord_p] = value_label_count.pop()
+        elif len(value_label_count) > 1:
+            # 近傍が複数の既ラベル or WSHED -> pをWSHEDにする
+            arr2d_label[coord_p] = -1 # WSHEDは-1で表す
+    return arr2d_label
+            
+def origianl_watershed_2d(): 
+    height_map = [
+        [6, 5, 4, 4, 5, 6],
+        [5, 0, 2, 2, 0, 5],
+        [4, 2, 3, 3, 2, 4],
+        [4, 2, 3, 3, 2, 4],
+        [5, 3, 0, 3, 3, 5],
+        [6, 5, 4, 4, 5, 6],
+    ]
+    seed_coords = [(1, 1), (1, 4), (4, 2)]
+
+    height_map, seed_coords, markers = generate_height_map_5basins(H=100, W=100, seed=2026)
+    print("height_map shape:", height_map.shape, height_map.dtype)
+    array2d_label = argorism_main(np.array(height_map), seed_coords)
+    return array2d_label
+
+if __name__ == "__main__":
+    array2d_label = origianl_watershed_2d()
+    print(array2d_label)
+    # CSVに出力
+    with open('./test/Output/watershed_result.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(array2d_label)
