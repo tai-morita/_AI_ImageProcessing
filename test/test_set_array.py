@@ -1,3 +1,9 @@
+from __future__ import annotations
+from typing import Literal, Tuple, Dict, Any
+import numpy as np
+from skimage import io, color, exposure, filters, morphology, util
+from scipy import ndimage as ndi
+import os
 import numpy as np
 
 def generate_height_map_5basins(H=100, W=100, seed=42):
@@ -83,26 +89,275 @@ def generate_height_map_5basins(H=100, W=100, seed=42):
     return height_u8, seed_pixels, markers
 
 
+def load_and_prepare_image(
+    path: str,
+    *,
+    to_float: bool = True,
+    normalize: bool = True,
+) -> np.ndarray:
+    """
+    画像を読み込み、グレースケール化して 2D 配列として返す。
+
+    Parameters
+    ----------
+    path : str
+        画像ファイルパス。
+    to_float : bool
+        True の場合 [0,1] float32 に正規化して返す。False の場合元の dtype を維持。
+    normalize : bool
+        ヒストグラムの飽和除去（1%）でコントラスト補正する（exposure.rescale_intensity）。
+
+    Returns
+    -------
+    img_gray : np.ndarray (H, W)
+        グレースケール画像。
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"画像が見つかりません: {path}")
+
+    img = io.imread(path)
+
+    # グレースケール化（RGB / RGBA / マルチチャンネル対応）
+    if img.ndim == 3:
+        # 例：RGBA の場合は RGB に落としてから gray
+        if img.shape[2] == 4:
+            img = util.img_as_float32(img)
+            img = img[..., :3]  # alpha drop
+        img_gray = color.rgb2gray(img)  # 返りは float64 [0,1]
+        img_gray = img_gray.astype(np.float32)
+    elif img.ndim == 2:
+        # そのまま
+        img_gray = img
+        # 型次第で 0..1 へ変換
+        if img_gray.dtype != np.float32 and img_gray.dtype != np.float64:
+            img_gray = util.img_as_float32(img_gray)
+    else:
+        raise ValueError(f"想定外の画像次元: {img.shape}")
+
+    # コントラスト正規化（ヒストグラムの1%を飽和切り）
+    if normalize:
+        p2, p98 = np.percentile(img_gray, (1, 99))
+        if p98 > p2:
+            img_gray = exposure.rescale_intensity(img_gray, in_range=(p2, p98))
+
+    if not to_float:
+        # 0..255 uint8 に戻す場合
+        img_gray = (np.clip(img_gray, 0, 1) * 255.0 + 0.5).astype(np.uint8)
+
+    return img_gray
+
+
+def morphology_denoise(
+    img_gray: np.ndarray,
+    *,
+    method: Literal["opening", "closing", "median"] = "opening",
+    selem_radius: int = 2,
+) -> np.ndarray:
+    """
+    モルフォロジーによるノイズ除去。
+
+    Parameters
+    ----------
+    img_gray : np.ndarray
+        入力グレースケール（推奨: 0..1 float）。
+    method : {"opening", "closing", "median"}
+        - "opening": 小さな白ノイズ除去（背景黒/前景白を想定）
+        - "closing": 黒ノイズの穴埋め（背景白/前景黒に強い）
+        - "median": 形状保持のノイズ低減（非線形フィルタ）
+    selem_radius : int
+        構造要素（disk）の半径（median の場合はサイズ計算に利用）。
+
+    Returns
+    -------
+    img_denoise : np.ndarray
+        ノイズ除去後の画像（dtype は入力に準拠）。
+    """
+    img = img_gray
+    is_float = np.issubdtype(img.dtype, np.floating)
+
+    # 形態学演算は [0,1] が都合よいので一時的に変換
+    work = util.img_as_float32(img) if not is_float else img.astype(np.float32)
+
+    selem = morphology.disk(selem_radius)
+
+    if method == "opening":
+        # 膨張(white)に弱いソルトノイズ除去
+        # skimage の opening はグレースケールにも適用可
+        work = morphology.opening(work, selem)
+    elif method == "closing":
+        work = morphology.closing(work, selem)
+    elif method == "median":
+        work = filters.median(work, footprint=selem)
+    else:
+        raise ValueError("method は 'opening' | 'closing' | 'median'")
+
+    # dtype を元に合わせる
+    if not is_float:
+        work = util.img_as_ubyte(np.clip(work, 0, 1))
+    return work
+
+
+def segment_foreground_background(
+    img_gray: np.ndarray,
+    *,
+    otsu_offset: float = 0.0,
+    invert: bool = False,
+) -> Tuple[np.ndarray, float]:
+    """
+    Otsu の大津の方法で前景/背景を二値化。
+
+    Parameters
+    ----------
+    img_gray : np.ndarray (0..1 float 推奨)
+    otsu_offset : float
+        Otsu 閾値に加えるオフセット（例：0.02 で少し厳しく）。
+    invert : bool
+        True の場合、前景/背景を反転。
+
+    Returns
+    -------
+    fg_mask : np.ndarray (bool)
+        True = 前景
+    threshold : float
+        使用した実際の閾値
+    """
+    img = img_gray.astype(np.float32) if not np.issubdtype(img_gray.dtype, np.floating) else img_gray
+    t = filters.threshold_otsu(img)
+    t = float(np.clip(t + otsu_offset, 0.0, 1.0))
+    fg = img > t
+    if invert:
+        fg = ~fg
+    return fg, t
+
+
+def distance_transform_pair(
+    fg_mask: np.ndarray,
+    *,
+    return_foreground_dist: bool = False,
+) -> Tuple[np.ndarray, np.ndarray | None]:
+    """
+    背景→前景のユークリッド距離（標準）と、必要なら前景→背景の距離も返す。
+
+    Parameters
+    ----------
+    fg_mask : np.ndarray (bool)
+        True が前景。
+    return_foreground_dist : bool
+        True の場合、前景内部から背景までの距離も計算して返す。
+
+    Returns
+    -------
+    dist_bg_to_fg : np.ndarray (float32)
+        背景ピクセルが最近傍の前景まで何ピクセルか（ユークリッド距離）。
+    dist_fg_to_bg : np.ndarray | None
+        前景ピクセルが最近傍の背景までの距離（必要時のみ）。
+    """
+    # 背景ピクセルに対して EDT（背景 True で distance）をかけると
+    # 最近傍の False までの距離になるため、~fg_mask を使う。
+    dist_bg_to_fg = ndi.distance_transform_edt(~fg_mask).astype(np.float32)
+
+    dist_fg_to_bg = None
+    if return_foreground_dist:
+        dist_fg_to_bg = ndi.distance_transform_edt(fg_mask).astype(np.float32)
+
+    return dist_bg_to_fg, dist_fg_to_bg
+
+
+def preprocess_image_to_distance(
+    path: str,
+    *,
+    denoise_method: Literal["opening", "closing", "median"] = "opening",
+    selem_radius: int = 2,
+    otsu_offset: float = 0.0,
+    invert_binary: bool = False,
+    return_foreground_dist: bool = False,
+    normalize_input: bool = True,
+) -> Dict[str, Any]:
+    """
+    画像読み込み → ノイズ除去（モルフォロジー）→ Otsu 二値化 → 距離画像（EDT）
+    までを実行し、2次元配列をまとめて返す高レベル関数。
+
+    Returns
+    -------
+    {
+      "gray": np.ndarray,           # 入力グレースケール（0..1 float）
+      "denoised": np.ndarray,       # ノイズ除去後
+      "fg_mask": np.ndarray,        # 前景マスク(bool)
+      "threshold": float,           # 使用閾値（Otsu+offset）
+      "dist_bg_to_fg": np.ndarray,  # 背景→前景の距離（float32）
+      "dist_fg_to_bg": np.ndarray | None  # 前景→背景の距離（要求時のみ）
+    }
+    """
+    gray = load_and_prepare_image(path, to_float=True, normalize=normalize_input)
+    denoised = morphology_denoise(gray, method=denoise_method, selem_radius=selem_radius)
+    # denoised は uint8 の可能性があるので 0..1 float に統一
+    denoised_f = denoised.astype(np.float32) / (255.0 if denoised.dtype == np.uint8 else 1.0)
+
+    fg_mask, thr = segment_foreground_background(denoised_f, otsu_offset=otsu_offset, invert=invert_binary)
+    dist_bg_to_fg, dist_fg_to_bg = distance_transform_pair(fg_mask, return_foreground_dist=return_foreground_dist)
+
+    return {
+        "gray": gray.astype(np.float32),
+        "denoised": denoised_f.astype(np.float32),
+        "fg_mask": fg_mask.astype(bool),
+        "threshold": float(thr),
+        "dist_bg_to_fg": dist_bg_to_fg,
+        "dist_fg_to_bg": dist_fg_to_bg,
+    }
+
+def translate_gray(img):
+    # 画像をグレースケール化する
+    arr2d_img = io.imread(img, as_gray=True)
+    if arr2d_img.ndim == 3:
+        img_gray = color.rgb2gray(arr2d_img)
+    elif arr2d_img.ndim == 2:
+        img_gray = arr2d_img
+    else:
+        raise ValueError("想定外の画像次元: {}".format(arr2d_img.shape))
+    save_path = './study/test/Output/coin_gray.csv'
+    np.savetxt(save_path, img_gray, delimiter=',', fmt='%.4f')
+    # 画像で保存する
+    img_save_path = './study/test/Output/coin_gray.png'
+    io.imsave(img_save_path, (img_gray * 255).astype(np.uint8))
+    return img_gray
+
+def get_seed_coords(img):
+    # 画像からseed点の座標を取得する
+    # グレースケール画像
+    arr2d_img = io.imread(img, as_gray=True)
+    np.savetxt('./study/test/Output/preprocess_gray.csv', arr2d_img, delimiter=',', fmt='%.4f')
+
 if __name__ == "__main__":
-    height_map, seeds, markers = generate_height_map_5basins(H=100, W=100, seed=2026)
+    
+    out = preprocess_image_to_distance(
+            r"./study/test/Input/water_coins.jpg",
+            denoise_method="opening",    # "opening" | "closing" | "median"
+            selem_radius=2,
+            otsu_offset=0.0,
+            invert_binary=False,         # 背景/前景の極性が逆なら True
+            return_foreground_dist=True, # 前景→背景の距離も欲しい場合
+            normalize_input=True,
+        )
 
-    print("height_map shape:", height_map.shape, height_map.dtype)
-    print("markers unique labels:", np.unique(markers))
-    print("seeds (y, x):", seeds)
+    # np.savetxt('./study/test/Output/preprocess_gray.csv', out["gray"], delimiter=',', fmt='%.4f')
 
-    # 必要なら可視化（コメント解除）
+    get_seed_coords(r"./study/test/Input/marked_coin_gray.png")
+
+    # gray = out["gray"]
+    # denoised = out["denoised"]
+    # fg_mask = out["fg_mask"]
+    # dist_bg_to_fg = out["dist_bg_to_fg"]
+    # dist_fg_to_bg = out["dist_fg_to_bg"]
+
+
+
+    # 可視化例（任意）
     # import matplotlib.pyplot as plt
-    # plt.figure(figsize=(5,5))
-    # plt.imshow(height_map, cmap="terrain")
-    # ys, xs = zip(*seeds)
-    # plt.scatter(xs, ys, c="red", s=30, marker="x", label="seeds")
-    # plt.legend()
-    # plt.title("Height Map (lower = darker)")
-    # plt.colorbar()
-    # plt.tight_layout()
-    # plt.show()
-
-    # ファイル保存例（必要な方を使用）
-    # np.savetxt("height_map_100x100.csv", height_map, fmt="%d", delimiter=",")
-    # np.save("height_map_100x100.npy", height_map)
-    # np.savetxt("markers_100x100.csv", markers, fmt="%d", delimiter=",")
+    # fig, ax = plt.subplots(1, 4, figsize=(14, 4))
+    # ax[0].imshow(gray, cmap="gray"); ax[0].set_title("Gray")
+    # ax[1].imshow(denoised, cmap="gray"); ax[1].set_title("Denoised")
+    # ax[2].imshow(fg_mask, cmap="gray"); ax[2].set_title("Foreground (Otsu)")
+    # im = ax[3].imshow(dist_bg_to_fg, cmap="magma"); ax[3].set_title("EDT (BG→FG)")
+    # fig.colorbar(im, ax=ax[3])
+    # [a.axis("off") for a in ax]
+    # plt.tight_layout(); plt.show()

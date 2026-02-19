@@ -1,6 +1,8 @@
 import numpy as np
 import heapq
 import csv
+import tifffile
+from skimage import io, color, exposure, filters, morphology, util
 from . test_set_array import generate_height_map_5basins
 
 # 自作のwatershed実装
@@ -63,7 +65,7 @@ def push_neighbors_to_queue(coords, arr2d_label, arr2d_height, list_queue):
 def argorism_main(array2d, seed_coords):
     list_queue = [] # (height, width)の配列
     arr2d_label = np.zeros_like(array2d) # ラベリング結果を格納する配列
-    # seed点をラベリングする
+    # seed点をラベリングする。近傍にseedn点が複数ある場合は、同一のラベルにする
     value_label = 1
     for seed in seed_coords:
         arr2d_label[seed] = value_label
@@ -95,26 +97,42 @@ def argorism_main(array2d, seed_coords):
             arr2d_label[coord_p] = -1 # WSHEDは-1で表す
     return arr2d_label
             
-def origianl_watershed_2d(): 
-    height_map = [
-        [6, 5, 4, 4, 5, 6],
-        [5, 0, 2, 2, 0, 5],
-        [4, 2, 3, 3, 2, 4],
-        [4, 2, 3, 3, 2, 4],
-        [5, 3, 0, 3, 3, 5],
-        [6, 5, 4, 4, 5, 6],
-    ]
-    seed_coords = [(1, 1), (1, 4), (4, 2)]
-
-    height_map, seed_coords, markers = generate_height_map_5basins(H=100, W=100, seed=2026)
-    print("height_map shape:", height_map.shape, height_map.dtype)
-    np.savetxt('./study/test/Output/watershed_original.csv', np.array(height_map), delimiter=',', fmt='%d')
-    array2d_label = argorism_main(np.array(height_map), seed_coords)
+def origianl_watershed_2d(arr2d, seed_coords): 
+    # アルゴリズムを実行する
+    array2d_label = argorism_main(np.array(arr2d), seed_coords)
     return array2d_label
 
+def get_seed_coords(img):
+    # 画像からseed点の座標を取得する
+    # グレースケール画像
+    arr2d_img = io.imread(img, as_gray=True)
+    seed_coords = np.argwhere(arr2d_img >= 0.5) 
+    return seed_coords
+
 if __name__ == "__main__":
-    array2d_label = origianl_watershed_2d()
+    image_original = io.imread('./study/test/Input/coin_gray.png', as_gray=True)
+    image_seed = r"./study/test/Input/seed_coin.png"
+    seed_coords = get_seed_coords(image_seed) # seed点の座標を取得する
+    array2d_label = origianl_watershed_2d(image_original, seed_coords)
     print(array2d_label)
+
+    """
     # CSVに出力
     np.savetxt('./study/test/Output/watershed_result.csv', array2d_label, delimiter=',', fmt='%d')
     print("CSVに出力しました: ./study/test/Output/watershed_result.csv")
+    """
+    # 画像に出力
+    # ラベルを色に変換する
+    # ラベル0は背景、-1はWSHEDとする
+    array2d_label_color = np.zeros((array2d_label.shape[0], array2d_label.shape[1], 3), dtype=np.uint8)
+    for i in range(array2d_label.shape[0]):
+        for j in range(array2d_label.shape[1]):
+            if array2d_label[i, j] == 0:
+                array2d_label_color[i, j] = [0, 0, 0] # 背景は黒
+            elif array2d_label[i, j] == -1:
+                array2d_label_color[i, j] = [255, 255, 255] # WSHEDは白
+            else:
+                # ラベルに応じて色を変える (今回は適当に色を割り当てる)
+                array2d_label_color[i, j] = [(array2d_label[i, j] * 50) % 256, (array2d_label[i, j] * 80) % 256, (array2d_label[i, j] * 110) % 256]
+    io.imsave('./study/test/Output/watershed_result.png', array2d_label_color)
+    print("画像に出力しました: ./study/test/Output/watershed_result.png")
