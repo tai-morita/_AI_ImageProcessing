@@ -1,3 +1,13 @@
+source ./study/venv/bin/activate
+
+
+
+
+
+
+
+
+
 To Do (by copilot)
 了解です！
 Watershed（分水嶺）アルゴリズムを“比喩ではなく”処理ステップとして徹底的に理解したい という目的ですね。
