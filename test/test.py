@@ -3,6 +3,7 @@ import numpy as np
 import tifffile as tiff
 from skimage import filters, util
 from scipy import ndimage as ndi
+from PIL import Image
 
 def to_uint16_per_slice(stack_float, clip_percentile=99.9):
     """
@@ -79,8 +80,16 @@ def threshold_main():
 
     print("done.")
 
+def merge_Tooth():
+    import glob
+    dir = r"Watershed\Tooth\Data\overlay"
+    data = glob.glob(os.path.join(dir, "*.png"))
+    frames = []
+    for d in data:
+        img = Image.open(d)
+        frames.append(np.array(img))
+    frames = np.stack(frames, axis=0)
+    tiff.imwrite(os.path.join(dir, "overlay.tif"), frames)
+
 if __name__ == "__main__":
-    frames = tiff.imread(r"./study/test/Output/yn-omusubi_inference_shrink4_binary_u16.tif")
-    # 7-83までトリミング
-    frames = frames[7:84]
-    tiff.imwrite(r"./study/test/Output/yn-omusubi_inference_shrink4_7_83.tif", frames)
+    merge_Tooth()
