@@ -4,6 +4,8 @@ import csv
 import tifffile
 from skimage import io, color, exposure, filters, morphology, util
 from . test_set_array import generate_height_map_5basins
+import cv2
+
 
 # 自作のwatershed実装
 """
@@ -62,16 +64,25 @@ def push_neighbors_to_queue(coords, arr2d_label, arr2d_height, list_queue):
         if arr2d_label[coord] == 0: # MASKのみキューに入れる
             heapq.heappush(list_queue, (arr2d_height[coord], coord))
 
-def argorism_main(array2d, seed_coords):
+def connected_components_opencv(binary: np.ndarray, connectivity=8):
+    # binary は 0/255 の uint8 を推奨（OpenCVは8bitが前提の関数が多い）
+    if binary.dtype != np.uint8:
+        binary = (binary > 0).astype(np.uint8) * 255
+
+    num_labels, labels = cv2.connectedComponents(binary, connectivity=connectivity)
+    # 便利版：統計情報（面積、BBox、重心など）も
+    num, labels2, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=connectivity)
+    return (num_labels, labels), (num, labels2, stats, centroids)
+
+
+def argorism_main(array2d, arr2d_seed):
     list_queue = [] # (height, width)の配列
-    arr2d_label = np.zeros_like(array2d) # ラベリング結果を格納する配列
-    # seed点をラベリングする。近傍にseedn点が複数ある場合は、同一のラベルにする
-    value_label = 1
-    for seed in seed_coords:
-        arr2d_label[seed] = value_label
-        value_label += 1
+    arr2d_label = connected_components_opencv(arr2d_seed)[0][1]
+    # seed点をラベリングする。近傍にseed点が複数ある場合は、同一のラベルにする
+    print("最終:", np.max(arr2d_label))
     # ラベリングされた点(最初なのでseed)の近傍を優先度付きキューに入れる
-    for seed in seed_coords:
+    coords = np.argwhere(arr2d_label != 0)
+    for seed in coords:
         coords_neighbors = neighbors_lin(seed, arr2d_label.shape, neibors=8)
         push_neighbors_to_queue(coords_neighbors, arr2d_label, array2d, list_queue)
 
@@ -97,9 +108,12 @@ def argorism_main(array2d, seed_coords):
             arr2d_label[coord_p] = -1 # WSHEDは-1で表す
     return arr2d_label
             
-def origianl_watershed_2d(arr2d, seed_coords): 
+def origianl_watershed_2d(arr2d, arr2d_seed):
+    # 背景を0から-2にする
+    arr2d_seed[arr2d_seed == 0] = -2
+
     # アルゴリズムを実行する
-    array2d_label = argorism_main(np.array(arr2d), seed_coords)
+    array2d_label = argorism_main(np.array(arr2d), arr2d_seed)
     return array2d_label
 
 def get_seed_coords(img):
@@ -112,8 +126,9 @@ def get_seed_coords(img):
 if __name__ == "__main__":
     image_original = io.imread('./study/test/Input/coin_gray.png', as_gray=True)
     image_seed = r"./study/test/Input/seed_coin.png"
-    seed_coords = get_seed_coords(image_seed) # seed点の座標を取得する
-    array2d_label = origianl_watershed_2d(image_original, seed_coords)
+    arr2d_seed = io.imread(image_seed, as_gray=True)
+    # seed_coords = get_seed_coords(image_seed) # seed点の座標を取得する
+    array2d_label = origianl_watershed_2d(image_original, arr2d_seed)
     print(array2d_label)
 
     """
