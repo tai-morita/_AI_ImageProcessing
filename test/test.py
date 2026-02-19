@@ -82,14 +82,16 @@ def threshold_main():
 
 def merge_Tooth():
     import glob
-    dir = r"Watershed\Tooth\Data\overlay"
+    dir = r"Watershed\Tooth\Data\data_53"
     data = glob.glob(os.path.join(dir, "*.png"))
     frames = []
     for d in data:
-        img = Image.open(d)
+        img = Image.open(d).convert('L')  # グレースケールで読み込む
         frames.append(np.array(img))
     frames = np.stack(frames, axis=0)
-    tiff.imwrite(os.path.join(dir, "overlay.tif"), frames)
+    # 16bit TIFFで保存（0-65535の範囲にスケール）
+    frames_u16 = to_uint16_per_slice(frames.astype(np.float32), clip_percentile=99.9)
+    tiff.imwrite(os.path.join(dir, "data_53.tif"), frames_u16, photometric="minisblack")
 
 if __name__ == "__main__":
     merge_Tooth()

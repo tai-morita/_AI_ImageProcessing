@@ -1,6 +1,20 @@
 # OpenCVやその他の知識を備忘録として入れる。
 ## 用語
 - オープニング処理/クロージング処理(https://www.frontier.maxell.co.jp/blog/posts/22.html)
+## skimage
+segmentation.watershed(
+  image, markers, connectivity, offset, mask, compactness, watershed_line, dtype
+)
+### 引数の解説
+- image: 標高画像。通常画像に距離返還を施す。中心部が低地になるように反転する必要あり。
+- markers: image に対する seed. Noneの場合は画像の極小値からラベル化される。
+- connectivity: 隣接の定義。3次元だと6?
+- offset: 出力ラベルに対する座標オフセット?
+- mask: 領域拡張を許す場所をTrue, スキップするところはFalse
+- compactness: 形状のコンパクトさ? 高いと角に丸まり境界を無視しがち。
+- watershed_line: 境界を線として残すか
+- dtype: 出力ラベル配列のデータ型
+
 ## OpenCV
 - cv2.imread(filename, flags)  
   filenameを読み込んで、flagsで指定した方法で読み込む。

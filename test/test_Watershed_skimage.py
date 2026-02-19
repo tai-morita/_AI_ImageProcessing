@@ -55,6 +55,6 @@ def watershed_3d_tiff(input_path: str, labels_out: str):
 
 if __name__ == "__main__":
     watershed_3d_tiff(
-        input_path="./study/test/Input/yn-omusubi_inference_shrink4.tif",
-        labels_out="./study/test/Output/yn-omusubi_inference_shrink4_labels_3d.tif"
+        input_path="./Watershed/Tooth/data_053.tif",
+        labels_out="./test/Output/data_053.tif"
     )
