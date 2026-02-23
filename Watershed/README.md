@@ -51,6 +51,8 @@ skimageの引数について、以下を工夫する
 - connectivity: 6
 - watershed_line: True
 - dtype: uint16
+# 2026/02/23
+markersを編集した。ちょっとはいい感じ
 
 ### アイディア
 - 使用アルゴリズム: WaterShed

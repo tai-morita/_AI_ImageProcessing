@@ -3,6 +3,7 @@ import numpy as np
 import tifffile as tiff
 from scipy import ndimage as ndi
 from skimage import filters, morphology, segmentation, feature, util
+from skimage.color import label2rgb
 
 def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
     # --- 1) 読み込み（3D）---
@@ -17,12 +18,17 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
 
     # --- 3) しきい値で前景抽出 ---
     # 均一ではない照明なら、局所しきい値やOtsuのZ別適用なども検討
+    # 今回は前景をすでに抽出したものを使うので、いらない
+    bw = vol_smooth > 0
+    """
     thr = filters.threshold_otsu(vol_smooth)
     bw = vol_smooth > thr
     bw = morphology.remove_small_objects(bw, min_size=64)
+    """
 
     # --- 4) 距離変換（3D） & マーカー ---
     dist = ndi.distance_transform_edt(bw)
+    tiff.imwrite("./test/Output/dist.tif", dist.astype(np.float32))  # デバッグ用
 
     # 3D のピークローカル最大を検出
     # footprint は 3x3x3 の近傍（26近傍）相当
@@ -44,7 +50,8 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
         -dist,  # 中心に向かうように
         markers=markers,
         mask=bw,
-        connectivity=1  # 3Dの6近傍
+        connectivity=6,  # 3Dの6近傍
+        watershed_line=False
     )
 
     # --- 6) 保存（32bit推奨）---
