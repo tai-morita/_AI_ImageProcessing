@@ -4,7 +4,7 @@ import tifffile as tiff
 from scipy import ndimage as ndi
 from skimage import filters, morphology, segmentation, feature, util
 
-def watershed_3d_tiff(input_path: str, labels_out: str):
+def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
     # --- 1) 読み込み（3D）---
     vol = tiff.imread(input_path)  # (Z, Y, X)
     if vol.ndim != 3:
@@ -33,9 +33,7 @@ def watershed_3d_tiff(input_path: str, labels_out: str):
         exclude_border=False
     )
 
-    markers = np.zeros_like(vol, dtype=np.int32)
-    for i, (z, y, x) in enumerate(coords, start=1):
-        markers[z, y, x] = i
+    markers = tiff.imread(markers_path)  # (Z, Y, X)
 
     # （ピークが多すぎる場合）h-maximaを併用
     # markers = morphology.label(morphology.h_maxima(dist, h=1.0))
@@ -56,5 +54,6 @@ def watershed_3d_tiff(input_path: str, labels_out: str):
 if __name__ == "__main__":
     watershed_3d_tiff(
         input_path="./Watershed/Tooth/data_053.tif",
+        markers_path="./Watershed/Tooth/mask_edited.tif",
         labels_out="./test/Output/data_053.tif"
     )
