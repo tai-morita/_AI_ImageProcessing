@@ -2,6 +2,7 @@
 # ペイントでシード点を編集するわけだが、複数ピクセルにまたがってしまう。
 # 隣接するピクセルは同じシード点になってほしいので、隣接ピクセルは同一ラベルとして統合する。
 
+import os
 import numpy as np
 import tifffile as tiff
 from scipy import ndimage
@@ -58,6 +59,13 @@ def add_original_seed(seed_path, add_seed_path, frame_number):
     seed_frames[frame_number] = add_seed_frame
     tiff.imwrite(seed_path, seed_frames.astype(np.uint16))
 
+def value_down(input_path):
+# 手動アノテーションのために値を255-> 200に下げる
+    frames = tiff.imread(input_path)
+    frames[frames > 200] = 200
+    dir = os.path.dirname(input_path)
+    tiff.imwrite(os.path.join(dir, "FramesForAnnotation.tif"), frames.astype(np.uint16))
+
 if __name__ == "__main__":
     """
     edit_seed_3d(
@@ -65,7 +73,8 @@ if __name__ == "__main__":
         output_path="./Watershed/Tooth/mask_edited.tif",
         slice_indices=[34, 91, 164]
     )
-    """
     add_original_seed(r"./test\Input\mask_edited.tif",
                       r"./test\Input\seed_65.tif",
                       65)
+    """
+    value_down(r"./test\Input\data_053.tif")
