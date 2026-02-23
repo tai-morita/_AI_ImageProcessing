@@ -7,7 +7,6 @@ import tifffile as tiff
 from scipy import ndimage
 from skimage import io
 
-
 def neighbors_lin(coords, arr_shape, neibors=8):
     # 8近傍の座標を返す
     # ただし、画像の範囲外の座標は返さない (1ライン増やすのとどっちがのであろう)
@@ -53,5 +52,5 @@ if __name__ == "__main__":
     edit_seed_3d(
         input_path="./Watershed/Tooth/mask.tif",
         output_path="./Watershed/Tooth/mask_edited.tif",
-        slice_indices=[34, 91]
+        slice_indices=[34, 91, 164]
     )

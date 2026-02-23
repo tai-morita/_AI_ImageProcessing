@@ -5,6 +5,21 @@ from scipy import ndimage as ndi
 from skimage import filters, morphology, segmentation, feature, util
 from skimage.color import label2rgb
 
+def threshold_input_tiff(input_path: str, output_path: str):
+    # --- 1) 読み込み（3D）---
+    vol = tiff.imread(input_path)  # (Z, Y, X)
+    if vol.ndim != 3:
+        raise ValueError(f"3Dボリュームを想定していますが、形状が {vol.shape} です。")
+
+    # --- 2) 前処理 ---
+    vol_smooth = filters.gaussian(vol, sigma=1.0, preserve_range=True)
+
+    # --- 3) しきい値で前景抽出 ---
+    #背景はすでに0なので、前景を1にするだけ
+    bw = vol_smooth > 0
+
+    tiff.imwrite(output_path, bw.astype(np.uint8) * 255)
+
 def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
     # --- 1) 読み込み（3D）---
     vol = tiff.imread(input_path)  # (Z, Y, X)
@@ -28,7 +43,7 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
 
     # --- 4) 距離変換（3D） & マーカー ---
     dist = ndi.distance_transform_edt(bw)
-    tiff.imwrite("./test/Output/dist.tif", dist.astype(np.float32))  # デバッグ用
+    # tiff.imwrite("./test/Output/dist.tif", dist.astype(np.float32))  # デバッグ用
 
     # 3D のピークローカル最大を検出
     # footprint は 3x3x3 の近傍（26近傍）相当
@@ -60,7 +75,7 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
 
 if __name__ == "__main__":
     watershed_3d_tiff(
-        input_path="./Watershed/Tooth/data_053.tif",
-        markers_path="./Watershed/Tooth/mask_edited.tif",
-        labels_out="./test/Output/data_053.tif"
+        input_path="./test/Input/data_053.tif",
+        markers_path="./test/Input/mask_edited.tif",
+        labels_out="./test/Output/Watershed_data_053.tif"
     )

@@ -80,6 +80,9 @@ def threshold_main():
 
     print("done.")
 
+def edit_seed():
+    
+
 def merge_Tooth():
     import glob
     dir = r"Watershed\Tooth\Data\data_53"
