@@ -48,9 +48,24 @@ def edit_seed_3d(input_path: str, output_path: str, slice_indices: list):
     print(f"ラベル数: {label_number}")  # デバッグ用
     tiff.imwrite(output_path, arr3d_label.astype(np.int16))
 
+def add_original_seed(seed_path, add_seed_path, frame_number):
+    # 手動で追加したseed画像を挿入する
+    seed_frames = tiff.imread(seed_path)
+    add_seed_frame = tiff.imread(add_seed_path)
+    # seedが連番になるように調節
+    max_count = np.max(seed_frames)
+    add_seed_frame[add_seed_frame > 0] += max_count
+    seed_frames[frame_number] = add_seed_frame
+    tiff.imwrite(seed_path, seed_frames.astype(np.uint16))
+
 if __name__ == "__main__":
+    """
     edit_seed_3d(
         input_path="./Watershed/Tooth/mask.tif",
         output_path="./Watershed/Tooth/mask_edited.tif",
         slice_indices=[34, 91, 164]
     )
+    """
+    add_original_seed(r"./test\Input\mask_edited.tif",
+                      r"./test\Input\seed_65.tif",
+                      65)

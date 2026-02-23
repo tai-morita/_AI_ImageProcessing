@@ -81,7 +81,22 @@ def threshold_main():
     print("done.")
 
 def edit_seed():
+    # 手塗したデータのseedを作成する
+    # 色付け-> 255 とし二値化する
+    input_path = r"C:\Users\morit\Desktop\work\study\study\test\Input\edit65_data_053.tif"
+    output_path = r"C:\Users\morit\Desktop\work\study\study\test\Output\seed_65.tif"
+    frame_number = 65
+
+    frame = tiff.imread(input_path)[frame_number]
+
+    # 二値 seed 作成（形状維持）
+    seed = (frame == 255).astype(np.uint16)
     
+    # x = 7 以上のところはすべて0に
+    seed[:, 7:] = 0
+
+
+    tiff.imwrite(output_path, seed)
 
 def merge_Tooth():
     import glob
@@ -97,4 +112,4 @@ def merge_Tooth():
     tiff.imwrite(os.path.join(dir, "data_53.tif"), frames_u16, photometric="minisblack")
 
 if __name__ == "__main__":
-    merge_Tooth()
+    edit_seed()
