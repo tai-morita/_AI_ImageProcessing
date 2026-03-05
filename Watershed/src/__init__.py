@@ -1,2 +1,2 @@
-from .test_set_array import generate_height_map_5basins
-from .test_RotateVolume import axial_transpose
+from .SetArray import generate_height_map_5basins
+from .RotateVolume import axial_transpose

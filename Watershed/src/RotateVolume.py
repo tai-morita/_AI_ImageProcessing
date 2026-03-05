@@ -37,6 +37,6 @@ def axial_transpose(input_path, output_dir):
     )
 
 if __name__ == "__main__":
-    axial_transpose(r"./test\Input\data_053.tif",
-                    r"./test\Output")
+    axial_transpose(r"./Data/Input/data_053.tif",
+                    r"./Data/Output")
     print("Done")

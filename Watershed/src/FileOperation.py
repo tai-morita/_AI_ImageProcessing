@@ -26,11 +26,11 @@ def merge_volume(axial_path, sagittal_path, coronal_path):
 if __name__ == "__main__":
     """
     watershed_3d_tiff(
-        input_path  = "./test/Input/data_053.tif",
-        markers_path= "./test/Input/mask_edited.tif",
-        labels_out  = "./test/Output/Watershed_data_053.tif"
+        input_path  = "./Data/Input/data_053.tif",
+        markers_path= "./Data/Input/mask_edited.tif",
+        labels_out  = "./Data/Output/Watershed_data_053.tif"
     )
     """
-    merge_volume(r"./test\Output\Watershed_data_053.tif",
-                 r"./test\Output\Watershed_data_053_sagittal.tif",
-                 r"./test\Output\Watershed_data_053_coronal.tif")
+    merge_volume(r"./Data/Output/Watershed_data_053.tif",
+                 r"./Data/Output/Watershed_data_053_sagittal.tif",
+                 r"./Data/Output/Watershed_data_053_coronal.tif")

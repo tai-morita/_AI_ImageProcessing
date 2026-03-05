@@ -5,7 +5,7 @@ import tifffile as tiff
 from scipy import ndimage as ndi
 from skimage import filters, morphology, segmentation, feature, util
 from skimage.color import label2rgb
-from .test_RotateVolume import axial_transpose
+from .RotateVolume import axial_transpose
 
 def threshold_input_tiff(input_path: str, output_path: str):
     # --- 1) 読み込み（3D）---
@@ -89,7 +89,7 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
 
 if __name__ == "__main__":
     watershed_3d_tiff(
-        input_path  = "./test/Input/data_053.tif",
-        markers_path= "./test/Input/Markers/merged_seed.tif",
-        labels_out  = "./test/Output/test_Watershed_data_053.tif"
+        input_path  = "./Data/Input/data_053.tif",
+        markers_path= "./Data/Input/Markers/merged_seed.tif",
+        labels_out  = "./Data/Output/test_Watershed_data_053.tif"
     )

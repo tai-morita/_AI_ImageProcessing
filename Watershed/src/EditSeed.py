@@ -136,15 +136,15 @@ def annotation_to_seed(folder_path, output_path):
     tiff.imwrite(output_path, merge_frames.astype(np.uint16))
         
 if __name__ == "__main__":
-    annotation_to_seed(r"./test\Input\Markers", r"./test\Input\Markers\merged_seed.tif")
+    annotation_to_seed(r"./Data/Input/Markers", r"./Data/Input/Markers/merged_seed.tif")
     """
     edit_seed_3d(
-        input_path="./Watershed/Tooth/mask.tif",
-        output_path="./Watershed/Tooth/mask_edited.tif",
+        input_path="./Data/Input/mask.tif",
+        output_path="./Data/Input/mask_edited.tif",
         slice_indices=[34, 91, 164]
     )
-    add_original_seed(r"./test\Input\mask_edited.tif",
-                      r"./test\Input\seed_65.tif",
+    add_original_seed(r"./Data/Input/mask_edited.tif",
+                      r"./Data/Input/seed_65.tif",
                       65)
     """
     print("Done")
