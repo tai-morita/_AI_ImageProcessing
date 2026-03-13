@@ -15,12 +15,12 @@ def save_numpy(
         label_map = np.isin(label_map, extract_labels).astype(np.uint16)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    if False:
+    if True:
         np.save(os.path.join(output_dir, f"volume_{index}.npy"), volume)
         np.save(os.path.join(output_dir, f"volume_rotated_{index}.npy"), volume_rotated)
         np.save(os.path.join(output_dir, f"label_map_{index}.npy"), label_map)
     # tiff形式で保存
-    tifffile.imwrite(os.path.join(output_dir, f"volume_{index}.tiff"), volume.astype(np.float32))
-    tifffile.imwrite(os.path.join(output_dir, f"volume_rotated_{index}.tiff"), volume_rotated.astype(np.float32))
-    tifffile.imwrite(os.path.join(output_dir, f"label_map_{index}.tiff"), label_map.astype(np.uint16))
+    tifffile.imwrite(os.path.join(output_dir, f"volume_{index}.tif"), volume.astype(np.float32))
+    tifffile.imwrite(os.path.join(output_dir, f"volume_rotated_{index}.tif"), volume_rotated.astype(np.float32))
+    tifffile.imwrite(os.path.join(output_dir, f"label_map_{index}.tif"), label_map.astype(np.uint16))
     print(f"Data saved to {output_dir}. index: {index}")
