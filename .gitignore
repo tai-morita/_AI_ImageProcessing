@@ -1,5 +1,6 @@
 Watershed/Tooth/Data/
 venv/
-Watershed/Data/
+Watershed/Data/Input/Old
+Watershed/Data/Output/Old
 __pycache__/
 *.pyc
