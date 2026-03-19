@@ -26,7 +26,10 @@ def threshold_input_tiff(input_path: str, output_path: str):
 
     tiff.imwrite(output_path, bw.astype(np.uint8) * 255)
 
-def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
+def watershed_3d_tiff(input_path: str, 
+                      markers_path: str, 
+                      labels_out: str,
+                      connectivity: int = 6):
     # インプット: 歯のみの画像, マーカー
     # --- 1) 読み込み（3D）---
     vol = tiff.imread(input_path)  # (Z, Y, X)
@@ -51,7 +54,7 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
 
     # --- 4) 距離変換（3D） & マーカー ---
     dist = ndi.distance_transform_edt(bw)
-    # tiff.imwrite("./study/Watershed/Data/Output/20260313/dist.tif", dist.astype(np.float32))  # デバッグ用
+    # tiff.imwrite("./study/Watershed/Data/Output/20260319/dist.tif", dist.astype(np.float32))  # デバッグ用
     # tiff.imwrite("./study/Watershed/Data/Output/20260313/bw.tif", bw.astype(np.float32))  # デバッグ用
 
     # 3D のピークローカル最大を検出
@@ -64,6 +67,19 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
     )
 
     markers = tiff.imread(markers_path)  # (Z, Y, X)
+    # 各ラベルを個別に closing して、ラベル同士が混ざらないようにする
+    if False:
+        markers = markers.astype(np.int32)
+        markers_closed = np.zeros_like(markers, dtype=np.int32)
+        selem = morphology.ball(1)
+        for label_id in np.unique(markers):
+            if label_id == 0:
+                continue
+            label_mask = markers == label_id
+            label_closed = morphology.closing(label_mask, selem)
+            label_closed &= bw
+            markers_closed[label_closed] = label_id
+        markers = markers_closed
 
     # （ピークが多すぎる場合）h-maximaを併用
     # markers = morphology.label(morphology.h_maxima(dist, h=1.0))
@@ -74,15 +90,20 @@ def watershed_3d_tiff(input_path: str, markers_path: str, labels_out: str):
         -dist,  # 中心に向かうように
         markers=markers,
         mask=bw,
-        connectivity=6,  # 3Dの6近傍
+        connectivity=connectivity,  # 3Dの6近傍
         watershed_line=False
     )
 
     # --- 6) 保存（uint16グレースケール & カラー）---
     print(f"ラベル数: {labels.max()}")  # デバッグ用
     # グレースケール保存（uint16）
+    if not os.path.exists(os.path.dirname(labels_out)):
+        os.makedirs(os.path.dirname(labels_out), exist_ok=True)
     tiff.imwrite(labels_out, labels.astype(np.uint16))
-    print(f"Saved: {labels_out}, 形状: {labels.shape}, データ型: {labels.dtype}")  # デバッグ用
+    print(f"Saved: {labels_out}")
+    print(f"形状: {labels.shape}, データ型: {labels.dtype}")  # デバッグ用
+    for i in range(1, labels.max() + 1):
+        print(f"ラベル {i}: ボクセル数 = {np.sum(labels == i)}")  # デバッグ用
     base, ext = os.path.splitext(labels_out)
     color_out = base + '_color' + ext
     save_colorized_labels(labels, color_out)
