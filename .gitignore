@@ -4,3 +4,4 @@ Watershed/Data/
 Watershed/Data/
 __pycache__/
 *.pyc
+test/
