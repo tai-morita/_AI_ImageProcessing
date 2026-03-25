@@ -62,6 +62,29 @@ def edit_seed(volume_label_path, volume_label_edit_path, output_path):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
     tiff.imwrite(output_path, seed_frames.astype(np.int16))
 
+def edit_seed_1teeth_per_slice(volume_label_path, volume_label_edit_path, output_path):
+    # 1スライスに1歯としてシード点を編集する
+    original_frames = tiff.imread(volume_label_path)
+    edit_frames = tiff.imread(volume_label_edit_path)
+    seed_frames = original_frames - edit_frames
+    seed_index = 0  # ラベル番号の開始
+    for slice_index in range(1, seed_frames.shape[0]+1):
+        seed_slice = seed_frames[slice_index - 1]
+        if np.sum(seed_slice) == 0:
+            continue  # シード点がないスライスはスキップ
+        # 2値化してラベリング。同一スライスは同じラベリングにする
+        binary_seed_slice = seed_slice > 0
+        label, numbers = ndimage.label(binary_seed_slice)
+        print(f"スライス {slice_index} のシード点数: {numbers}")  # デバッグ用
+        if numbers > 0:
+            seed_frames[slice_index - 1] = (label > 0).astype(np.int16) * (seed_index + 1)
+            seed_index += 1
+
+    print(f"総シード点数: {seed_index}")  # デバッグ用
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    tiff.imwrite(output_path, seed_frames.astype(np.int16))
+
     if False:
         centroid_output_path = os.path.splitext(output_path)[0] + "_centroid.tif"
         centroid_volume = _build_seed_centroid_volume(seed_frames.astype(np.int16))
