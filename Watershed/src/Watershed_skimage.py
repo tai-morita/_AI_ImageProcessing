@@ -39,6 +39,7 @@ def watershed_3d_tiff(input_path: str,
     vol = util.img_as_float(vol)
 
     # --- 2) 前処理 ---
+    # ノイズ処理
     vol_smooth = filters.gaussian(vol, sigma=1.0, preserve_range=True)
 
     # --- 3) しきい値で前景抽出 ---
@@ -54,17 +55,18 @@ def watershed_3d_tiff(input_path: str,
 
     # --- 4) 距離変換（3D） & マーカー ---
     dist = ndi.distance_transform_edt(bw)
-    # tiff.imwrite("./study/Watershed/Data/Output/20260319/dist.tif", dist.astype(np.float32))  # デバッグ用
+    # tiff.imwrite(os.path.join(os.path.dirname(input_path), "dist.tif"), dist.astype(np.float32))  # デバッグ用
     # tiff.imwrite("./study/Watershed/Data/Output/20260313/bw.tif", bw.astype(np.float32))  # デバッグ用
 
     # 3D のピークローカル最大を検出
     # footprint は 3x3x3 の近傍（26近傍）相当
-    coords = feature.peak_local_max(
-        dist,
-        labels=bw,
-        footprint=np.ones((3, 3, 3), dtype=bool),
-        exclude_border=False
-    )
+    if markers_path is None:
+        coords = feature.peak_local_max(
+            dist,
+            labels=bw,
+            footprint=np.ones((3, 3, 3), dtype=bool),
+            exclude_border=False
+        )
 
     markers = tiff.imread(markers_path)  # (Z, Y, X)
     # 各ラベルを個別に closing して、ラベル同士が混ざらないようにする
