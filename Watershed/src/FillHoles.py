@@ -40,27 +40,29 @@ def fill_holes_in_binary_volume(
         print(f"Distance Output: {distance_output_path}")
     print(f"Filled voxels: {(filled.sum() - bw.sum())}")
 
+    return distance.astype("float32") if distance_output_path is not None else None
+
 
 if __name__ == "__main__":
     input_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map"
-    output_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\20260323"
+    output_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map_filled"
 
     files = [
         file_path
-        for file_path in glob.glob(os.path.join(input_dir, "label_map_3.tif"))
+        for file_path in glob.glob(os.path.join(input_dir, "label_map_*.tif"))
         if "annotate" not in os.path.basename(file_path).lower()
         and "dist" not in os.path.basename(file_path).lower()
     ]
 
     for file_path in files:
         base_name = os.path.splitext(os.path.basename(file_path))[0]
-        output_path = os.path.join(input_dir, f"{base_name}_filled.tif")
-        # distance_output_path = os.path.join(input_dir, f"{base_name}_filled_dist.tif")
+        output_path = os.path.join(output_dir, f"{base_name}_filled.tif")
+        distance_output_path = os.path.join(output_dir, f"{base_name}_filled_dist.tif")
         print(f"Processing: {file_path}")
         fill_holes_in_binary_volume(
             input_path=file_path,
             output_path=output_path,
             distance_output_path=None,
-            per_slice=False,
+            per_slice=True,
             min_hole_size=None,
         )
