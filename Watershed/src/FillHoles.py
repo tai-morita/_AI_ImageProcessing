@@ -26,8 +26,11 @@ def fill_holes_in_binary_volume(
     if min_hole_size is not None:
         filled = morphology.remove_small_holes(filled, area_threshold=min_hole_size)
 
+    # 二値化の値を0と255に変換して保存
+    filled = filled.astype("uint8") * 255
+
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    tiff.imwrite(output_path, filled.astype("uint8"))
+    tiff.imwrite(output_path, filled)
 
     if distance_output_path is not None:
         distance = ndi.distance_transform_edt(filled)

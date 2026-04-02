@@ -55,7 +55,7 @@ def watershed_3d_tiff(input_path: str,
 
     # --- 4) 距離変換（3D） & マーカー ---
     dist = ndi.distance_transform_edt(bw)
-    # tiff.imwrite(os.path.join(os.path.dirname(input_path), "dist.tif"), dist.astype(np.float32))  # デバッグ用
+    tiff.imwrite(os.path.join(os.path.dirname(input_path), f"{os.path.splitext(os.path.basename(input_path))[0]}_dist.tif"), dist.astype(np.float32))  # デバッグ用
     # tiff.imwrite("./study/Watershed/Data/Output/20260313/bw.tif", bw.astype(np.float32))  # デバッグ用
 
     # 3D のピークローカル最大を検出
