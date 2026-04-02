@@ -6,6 +6,13 @@ from scipy import ndimage as ndi
 from skimage import morphology
 import numpy as np
 import matplotlib.pyplot as plt
+try:
+    from .AnnotationONGUI import load_3d_tiff, SliceViewer3D
+    from .EditSeed import label_previous_slice_on_large_area_diff, profile_component_area_by_slice
+except ImportError:
+    # Support direct execution: python Watershed/src/temp.py
+    from AnnotationONGUI import load_3d_tiff, SliceViewer3D
+    from EditSeed import label_previous_slice_on_large_area_diff, profile_component_area_by_slice
 
 def save_dist(input_path):
     # 距離画像に変換する
@@ -205,7 +212,100 @@ def show_component_profile(profile: list[dict[str, int]], title: str = "Componen
     plt.show()
 
 
+def moving_average_1d(array, window=5, mode="same"):
+    """
+    1次元配列の移動平均
+    mode="same" なら元と同じ長さで返す
+    """
+    a = np.asarray(array, dtype=float)
+    if window < 1:
+        raise ValueError("window must be >= 1")
+    kernel = np.ones(window, dtype=float) / window
+    return np.convolve(array, kernel, mode=mode)
 
+def get_profile(file_path: str) -> list[dict[int]]:
+    # file_path のプロファイルを取得する
+    # 差分が負から正に変わるスライスを探す
+    frames = tiff.imread(file_path)
+    profile = []
+    for slice_index in range(frames.shape[0]):
+        area = np.count_nonzero(frames[slice_index])
+        profile.append({"slice": slice_index, "area": area})
+    # 移動平均して均してから極小値を求める
+    profile_smoothed = moving_average_1d([row["area"] for row in profile], window=5)
+    difference = np.diff(profile_smoothed)
+    extrema_indices = np.where((difference[:-1] < 0) & (difference[1:] > 0))[0] + 1
+    extrema_slices = [profile[idx]["slice"] for idx in extrema_indices]
+    extrema_areas = [profile[idx]["area"] for idx in extrema_indices]
+    print("Extrema (slice, area):")
+    for slice, area in zip(extrema_slices, extrema_areas):
+        print(f"Slice: {slice}, Area: {area}")
+    return extrema_slices
+
+def auto_annotation(file_path: str, cmap: str = "gray", undo_radius_px: float = 5.0) -> list:
+    # スライス画像を手動でマーキングして、Seed画像を作成する
+    # 読み込み & 座標の保存はAnnotationONGUI.pyに任せる
+    # 座標を label_previous_slice_on_large_area_diff の 引数に渡す
+    # 探索するスライスは、 file_path のプロファイルを使う
+
+    volume = load_3d_tiff(file_path)
+    viewer = SliceViewer3D(volume=volume, cmap=cmap, undo_radius_px=undo_radius_px)
+    viewer.show()
+    viewer.print_saved_points()
+
+    extrema_slices = get_profile(file_path)
+    if len(viewer.clicked_points) == 0:
+        print("No seed points were selected.")
+        return []
+
+    # viewer.clicked_points: クリックした点のリスト (slice_index_1based, y, x)
+    seed_coordinates = []
+    seed_slices = []
+    for slice_index_1based, y, x in viewer.clicked_points:
+        # クリックした座標が、プロファイルしたデータのうちどのやまにいるかを判定する
+        # とりあえず二分探索で
+        min_index = 0
+        search_slice = [0, volume.shape[0] - 1]
+        for target_slice in extrema_slices:
+            if slice_index_1based <= target_slice:
+                search_slice = [min_index, target_slice]
+                break
+            else:
+                min_index = target_slice
+        seed_coordinates.append((y, x))
+        seed_slices.append(tuple(search_slice))
+    for (y, x), (start_slice, end_slice) in zip(seed_coordinates, seed_slices):
+        print(f"Seed coordinate (y, x): ({y}, {x}), search slice range: {start_slice}-{end_slice}")
+    labeling_no = [i + 1 for i in range(len(seed_coordinates))]
+    output_path = os.path.join(
+        os.path.dirname(file_path),
+        f"{os.path.splitext(os.path.basename(file_path))[0]}_auto_seed.tif",
+    )
+    profile, labeled = label_previous_slice_on_large_area_diff(
+        volume_label_path=file_path,
+        output_path=output_path,
+        coordinate_yx=seed_coordinates,
+        labeling_no=labeling_no,
+        slice_ranges=seed_slices,
+        diff_threshold=1000,
+        mark_coordinates=True,
+        coordinate_mark_value=255,
+    )
+    watershed_3d_tiff(
+        input_path=file_path, 
+        volume_label_annotate=labeled,
+        output_path=output_path,
+        connectivity=1)
+    print(f"saved: {output_path}")
+    return profile
+
+
+if __name__ == "__main__":
+	file_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1\label_map_1_filled.tif"
+	profile = auto_annotation(file_path)
+
+r"""
+指定した点に対して、スライスごとにその点が属する連結成分の面積をプロファイルとして取得する。
 if __name__ == "__main__":
     input_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1"
     output_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1"
@@ -243,3 +343,4 @@ if __name__ == "__main__":
         profile,
         title=f"Component area profile @ pixel {coordinate_yx}, frames {start_frame}-{end_frame}",
     )
+"""
