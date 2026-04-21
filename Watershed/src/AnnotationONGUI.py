@@ -177,7 +177,7 @@ def load_3d_tiff(tiff_path: str | Path) -> np.ndarray:
 	return volume
 
 
-def main() -> None:
+def main(tiff_path: str) -> None:
 	parser = argparse.ArgumentParser(
 		description="3D TIFF slice viewer (mouse wheel to change slice)",
 	)
@@ -189,12 +189,13 @@ def main() -> None:
 		default=5.0,
 		help="Right-click undo radius in pixels (default: 5.0)",
 	)
-	args = parser.parse_args()
+	# args = parser.parse_args()
 
-	volume = load_3d_tiff(args.tiff_path)
-	viewer = SliceViewer3D(volume=volume, cmap=args.cmap, undo_radius_px=args.undo_radius_px)
+	volume = load_3d_tiff(tiff_path)
+	viewer = SliceViewer3D(volume=volume, cmap="gray", undo_radius_px=5.0)
 	viewer.show()
 	viewer.print_saved_points()
+	return viewer.clicked_points
 
 
 if __name__ == "__main__":
