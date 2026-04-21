@@ -2,8 +2,27 @@ import numpy as np
 import tifffile as tiff
 import matplotlib.pyplot as plt
 
-from EditSeed import label_previous_slice_on_large_area_diff, profile_component_area_by_slice
+try:
+	from .EditSeed import label_previous_slice_on_large_area_diff, profile_component_area_by_slice
+	from .AnnotationONGUI import main as annotation_main
+except ImportError:
+	from EditSeed import label_previous_slice_on_large_area_diff, profile_component_area_by_slice
+	from AnnotationONGUI import main as annotation_main
 
+
+def split_clicked_coordinates(
+	clicked_coordinates: list[tuple[int, int, int]],
+) -> tuple[list[int], list[tuple[int, int]]]:
+	"""(slice, y, x) の配列を slices と (y, x) 配列に分割する。"""
+	slices = [int(s) for s, _, _ in clicked_coordinates]
+	coords = [(int(y), int(x)) for _, y, x in clicked_coordinates]
+	return slices, coords
+
+def get_slice_range(slices: list[int], margin: int = 5) -> list[tuple[int, int]]:
+	"""クリックされたスライスに対して、前後 margin スライスを含む範囲を返す。"""
+	if len(slices) == 0:
+		return []
+	return [(max(0, s - margin), s + margin) for s in slices]
 
 def plot_profiles_per_target(
 	profile: list[dict[str, object]],
@@ -256,6 +275,41 @@ def test_label_max_area_when_threshold_not_reached(tmp_path):
 	assert np.count_nonzero(labeled[2]) == 0
 	assert np.count_nonzero(labeled[4]) == 0
 	assert output_path.exists()
+
+def test_edit_seed_main(input_path: str, output_path: str):
+	# GUI 操作から Seed 作成まで一連の処理をする
+	mark_coordinates = False
+	coordinate_mark_value = 255
+
+	# GUI 操作
+	clicked_coordinates = annotation_main(input_path)
+
+	# クリックした Seed の座標を編集
+	slices, coordinates = split_clicked_coordinates(clicked_coordinates)
+	slice_ranges = get_slice_range(slices, margin=30)
+	labels = list(range(1, len(clicked_coordinates) + 1))
+
+	# Seed 編集とプロファイル作成
+	profile, labeled = label_previous_slice_on_large_area_diff(
+		volume_label_path=input_path,
+		output_path=output_path,
+		coordinate_yx=coordinates,
+		labeling_no=labels,
+		diff_threshold=1000,
+		connectivity=1,
+		slice_ranges=slice_ranges,
+		mark_coordinates=mark_coordinates,
+		coordinate_mark_value=coordinate_mark_value,
+	)
+	x_values = None  # 例: [0.0, 0.5, 1.0, ...] または [[target0用...], [target1用...]]
+	plot_profiles_per_target(
+		profile,
+		coordinates,
+		labels,
+		x_values=x_values,
+		x_label="slice",
+		slice_ranges=slice_ranges,
+	)
 
 if __name__ == "__main__":
 	volume_label_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1\label_map_1_filled.tif"
