@@ -45,4 +45,5 @@ if __name__ == "__main__":
     # edit_seed(volume_label_original, volume_label_annotate, seed_path)
     # edit_seed_1teeth_per_slice(volume_label_original, volume_label_annotate, seed_path)
     test_edit_seed_main(volume_label_original, volume_label_annotate)  # これでアノテーションGUIが起動するので、そこで編集して保存する
+    output_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\test.tif"
     watershed_3d_tiff(input_path, volume_label_annotate, output_path, connectivity=connectivity)

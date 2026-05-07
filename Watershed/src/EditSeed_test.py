@@ -166,7 +166,7 @@ def plot_profiles_per_target(
 	ax1.legend(lines, labels_legend, loc="upper right")
 
 	fig.tight_layout()
-	# plt.show()
+	plt.show() # プロファイル
 
 
 def test_profile_component_area_by_slice(tmp_path):
