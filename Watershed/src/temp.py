@@ -299,48 +299,40 @@ def auto_annotation(file_path: str, cmap: str = "gray", undo_radius_px: float = 
     print(f"saved: {output_path}")
     return profile
 
+def connected_components_2d(path, connectivity=2):
+    import numpy as np
+    from scipy import ndimage
+    """
+    binary_image: 0/1 または False/True の2次元配列
+    connectivity:
+    1 -> 4近傍
+    2 -> 8近傍
+    戻り値:
+    labels: 各連結成分に 1,2,3,... のラベルを付けた配列
+    num: 連結成分の個数
+    """
+    image = tiff.imread(path)
+    binary_image = np.asarray(image).astype(bool)
+    conn_component = []
+    for slice_index, slice in enumerate(binary_image):
+        if slice_index == 100:
+            break
+        print(f"Slice: {slice_index}")
+        structure = ndimage.generate_binary_structure(rank=2, connectivity=connectivity)
+        labels, num = ndimage.label(slice, structure=structure)
+        # print(f"  Number of connected components: {num}")
+        conn_component.append((num))
+    plt.plot(conn_component)
+    plt.xlabel("Slice index")
+    plt.ylabel("Number of connected components")
+    plt.title("Connected components per slice")
+    plt.grid(True, which='both', axis='both', linestyle='-', linewidth=0.5) # 主グリッド
+    plt.minorticks_on()
+    plt.grid(True, which='minor', axis='both', linestyle=':', linewidth=0.3) # 補助グリッド
+    plt.show()
+    return labels, num
+
 
 if __name__ == "__main__":
-	file_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1\label_map_1_filled.tif"
-	profile = auto_annotation(file_path)
-
-r"""
-指定した点に対して、スライスごとにその点が属する連結成分の面積をプロファイルとして取得する。
-if __name__ == "__main__":
-    input_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1"
-    output_dir = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1"
-
-    input_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260402_filled255_No1\label_map_1_filled.tif"
-    # save_dist(input_path)
-
-    coordinate_yx = (289, 141)
-    start_frame = 0
-    end_frame = 60
-
-    profile = profile_component_area_by_frame(
-        input_path=input_path,
-        coordinate_yx=coordinate_yx,
-        connectivity=1,
-        start_frame=start_frame,
-        end_frame=end_frame,
-    )
-    saved_path = os.path.join(output_dir, "label_map_1_component_value100.tif")
-    set_component_value_by_frame_and_save(
-        input_path=input_path,
-        output_path=saved_path,
-        coordinate_yx=coordinate_yx,
-        value=100,
-        connectivity=1,
-        start_frame=start_frame,
-        end_frame=end_frame,
-    )
-
-    print(f"target pixel (y, x): {coordinate_yx}")
-    print(f"frame range: {start_frame}-{end_frame}")
-    print(f"profile frames: {len(profile)}")
-    print(f"saved: {saved_path}")
-    show_component_profile(
-        profile,
-        title=f"Component area profile @ pixel {coordinate_yx}, frames {start_frame}-{end_frame}",
-    )
-"""
+    path = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\20260421_filled255_No1\label_map_1_filled.tif"
+    connected_components_2d(path, connectivity=2)
