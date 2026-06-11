@@ -30,20 +30,19 @@ watershed で必要なもの
 
 
 if __name__ == "__main__":
-
-    date = "20260421"
-    No = 1
+    date = "20260611"
+    No = 8
     keyword = "_filled"
     connectivity = 26
-    InputDir   = f"./Watershed/Data/Input/{date}{keyword}255_No{No}"
-    OutputDir  = f"./Watershed/Data/Output/{date}"
-    input_path            = f"{InputDir}/label_map_{No}{keyword}.tif"
-    volume_label_original = f"{InputDir}/label_map_{No}{keyword}.tif"
-    volume_label_annotate = f"{InputDir}/label_map_{No}{keyword}_annotate.tif"
-    seed_path             = f"{InputDir}/volume_{No}{keyword}_seed.tif"
-    output_path           = f"{OutputDir}/watershed_volume_{No}{keyword}_conn={connectivity}.tif"
+    InputDir   = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map"
+    OutputDir  = r"D:\_study\ImageProcessing\study\Watershed\Data\Output"
+    input_path            = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map\label_map_8.tif"
+    volume_label_original = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\label_map_8_filled.tif"
+    volume_label_annotate = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\label_map_8_filled_annotate.tif"
+    seed_path             = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\volume_8_filled_seed.tif"
+    output_path           = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\watershed_volume_8_filled_conn=26.tif"
     # edit_seed(volume_label_original, volume_label_annotate, seed_path)
     # edit_seed_1teeth_per_slice(volume_label_original, volume_label_annotate, seed_path)
-    test_edit_seed_main(volume_label_original, volume_label_annotate)  # これでアノテーションGUIが起動するので、そこで編集して保存する
+    test_edit_seed_main(input_path, volume_label_annotate)  # これでアノテーションGUIが起動するので、そこで編集して保存する
     output_path = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\test.tif"
     watershed_3d_tiff(input_path, volume_label_annotate, output_path, connectivity=connectivity)
