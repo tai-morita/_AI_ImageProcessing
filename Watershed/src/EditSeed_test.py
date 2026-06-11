@@ -11,12 +11,45 @@ except ImportError:
 
 
 def split_clicked_coordinates(
-	clicked_coordinates: list[tuple[int, int, int]],
-) -> tuple[list[int], list[tuple[int, int]]]:
-	"""(slice, y, x) の配列を slices と (y, x) 配列に分割する。"""
-	slices = [int(s) for s, _, _ in clicked_coordinates]
-	coords = [(int(y), int(x)) for _, y, x in clicked_coordinates]
-	return slices, coords
+	clicked_coordinates: list[tuple[int, int, int]] | list[dict[str, object]],
+) -> tuple[list[int], list[tuple[int, int]], list[int]]:
+	"""GUI出力を slices / coordinates / labels に正規化する。"""
+	slices: list[int] = []
+	coords: list[tuple[int, int]] = []
+	labels: list[int] = []
+
+	if len(clicked_coordinates) == 0:
+		return slices, coords, labels
+
+	first = clicked_coordinates[0]
+	if isinstance(first, dict):
+		for entry in clicked_coordinates:
+			if not isinstance(entry, dict):
+				raise ValueError("clicked_coordinates entries must all be dict when grouped format is used")
+			if "label" not in entry or "points" not in entry:
+				raise ValueError("grouped format requires 'label' and 'points'")
+			label = int(entry["label"])
+			points = entry["points"]
+			if not isinstance(points, list):
+				raise ValueError("entry['points'] must be a list")
+			for point in points:
+				if not (isinstance(point, tuple) or isinstance(point, list)) or len(point) != 3:
+					raise ValueError("point must be (slice, y, x)")
+				s, y, x = point
+				slices.append(int(s))
+				coords.append((int(y), int(x)))
+				labels.append(label)
+		return slices, coords, labels
+
+	for item in clicked_coordinates:
+		if not (isinstance(item, tuple) or isinstance(item, list)) or len(item) != 3:
+			raise ValueError("legacy format expects (slice, y, x)")
+		s, y, x = item
+		slices.append(int(s))
+		coords.append((int(y), int(x)))
+
+	labels = list(range(1, len(coords) + 1))
+	return slices, coords, labels
 
 def get_slice_range(slices: list[int], margin: int = 5) -> list[tuple[int, int]]:
 	"""クリックされたスライスに対して、前後 margin スライスを含む範囲を返す。"""
@@ -285,9 +318,11 @@ def test_edit_seed_main(input_path: str, output_path: str):
 	clicked_coordinates = annotation_main(input_path)
 
 	# クリックした Seed の座標を編集
-	slices, coordinates = split_clicked_coordinates(clicked_coordinates)
+	slices, coordinates, labels = split_clicked_coordinates(clicked_coordinates)
+	if len(coordinates) == 0:
+		print("GUIで座標が選択されなかったため処理を終了します")
+		return
 	slice_ranges = get_slice_range(slices, margin=30)
-	labels = list(range(1, len(clicked_coordinates) + 1))
 
 	# Seed 編集とプロファイル作成
 	profile, labeled = label_previous_slice_on_large_area_diff(

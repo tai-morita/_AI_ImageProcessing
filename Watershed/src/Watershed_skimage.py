@@ -11,6 +11,46 @@ except ImportError:
     from RotateVolume import axial_transpose
     from FileOperation import save_colorized_labels
 
+
+def _resolve_backend(use_gpu: bool | None = None) -> tuple[bool, object | None, object | None, object | None]:
+    """
+    Resolve GPU backend availability.
+
+    Returns
+    -------
+    use_gpu_backend : bool
+        True when GPU path is usable.
+    cp : module | None
+        cupy module.
+    cndi : module | None
+        cupyx.scipy.ndimage module.
+    cseg : module | None
+        cucim.skimage.segmentation module.
+    """
+    if use_gpu is False:
+        return False, None, None, None
+
+    try:
+        import cupy as cp  # type: ignore
+        from cupyx.scipy import ndimage as cndi  # type: ignore
+        from cucim.skimage import segmentation as cseg  # type: ignore
+    except Exception:
+        if use_gpu:
+            print("GPU requested, but CuPy/cuCIM is not available. Falling back to CPU.")
+        return False, None, None, None
+
+    try:
+        n_devices = int(cp.cuda.runtime.getDeviceCount())
+    except Exception:
+        n_devices = 0
+
+    if n_devices <= 0:
+        if use_gpu:
+            print("GPU requested, but no CUDA device was detected. Falling back to CPU.")
+        return False, None, None, None
+
+    return True, cp, cndi, cseg
+
 def threshold_input_tiff(input_path: str, output_path: str):
     # --- 1) 読み込み（3D）---
     vol = tiff.imread(input_path)  # (Z, Y, X)
@@ -29,7 +69,8 @@ def threshold_input_tiff(input_path: str, output_path: str):
 def watershed_3d_tiff(input_path: str, 
                       markers_path: str, 
                       labels_out: str,
-                      connectivity: int = 6):
+                      connectivity: int = 6,
+                      use_gpu: bool | None = None):
     # インプット: 歯のみの画像, マーカー
     # --- 1) 読み込み（3D）---
     vol = tiff.imread(input_path)  # (Z, Y, X)
@@ -37,6 +78,12 @@ def watershed_3d_tiff(input_path: str,
         raise ValueError(f"3Dボリュームを想定していますが、形状が {vol.shape} です。")
     print(f"入力ボリュームの形状: {vol.shape}, データ型: {vol.dtype}")  # デバッグ用
     vol = util.img_as_float(vol)
+
+    use_gpu_backend, cp, cndi, cseg = _resolve_backend(use_gpu)
+    if use_gpu_backend:
+        print("GPU backend enabled (CuPy + cuCIM).")
+    else:
+        print("CPU backend enabled.")
 
     # --- 2) 前処理 ---
     # ノイズ処理
@@ -54,7 +101,12 @@ def watershed_3d_tiff(input_path: str,
     """
 
     # --- 4) 距離変換（3D） & マーカー ---
-    dist = ndi.distance_transform_edt(bw)
+    if use_gpu_backend:
+        bw_gpu = cp.asarray(bw)
+        dist_gpu = cndi.distance_transform_edt(bw_gpu)
+        dist = cp.asnumpy(dist_gpu)
+    else:
+        dist = ndi.distance_transform_edt(bw)
     tiff.imwrite(os.path.join(os.path.dirname(input_path), f"{os.path.splitext(os.path.basename(input_path))[0]}_dist.tif"), dist.astype(np.float32))  # デバッグ用
     # tiff.imwrite("./study/Watershed/Data/Output/20260313/bw.tif", bw.astype(np.float32))  # デバッグ用
 
@@ -88,13 +140,26 @@ def watershed_3d_tiff(input_path: str,
 
     # --- 5) 3D watershed ---
     # elevation には負の距離を使うパターンもよく使われます（山＝中心を谷とみなす）
-    labels = segmentation.watershed(
-        -dist,  # 中心に向かうように
-        markers=markers,
-        mask=bw,
-        connectivity=connectivity,  # 3Dの6近傍
-        watershed_line=False
-    )
+    if use_gpu_backend:
+        dist_gpu = cp.asarray(dist)
+        markers_gpu = cp.asarray(markers)
+        bw_gpu = cp.asarray(bw)
+        labels_gpu = cseg.watershed(
+            -dist_gpu,
+            markers=markers_gpu,
+            mask=bw_gpu,
+            connectivity=connectivity,
+            watershed_line=False,
+        )
+        labels = cp.asnumpy(labels_gpu)
+    else:
+        labels = segmentation.watershed(
+            -dist,  # 中心に向かうように
+            markers=markers,
+            mask=bw,
+            connectivity=connectivity,  # 3Dの6近傍
+            watershed_line=False
+        )
 
     # --- 6) 保存（uint16グレースケール & カラー）---
     print(f"ラベル数: {labels.max()}")  # デバッグ用
