@@ -37,10 +37,10 @@ if __name__ == "__main__":
     InputDir   = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map"
     OutputDir  = r"D:\_study\ImageProcessing\study\Watershed\Data\Output"
     input_path            = r"D:\_study\ImageProcessing\study\Watershed\Data\Input\labeled_map\label_map_8.tif"
-    volume_label_original = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\label_map_8_filled.tif"
-    volume_label_annotate = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\label_map_8_filled_annotate.tif"
-    seed_path             = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\volume_8_filled_seed.tif"
-    output_path           = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\watershed_volume_8_filled_conn=26.tif"
+    volume_label_original = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\label_map_8_filled.tif"
+    volume_label_annotate = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\label_map_8_filled_annotate.tif"
+    seed_path             = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\volume_8_filled_seed.tif"
+    output_path           = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\watershed_volume_8_filled_conn=26.tif"
     # edit_seed(volume_label_original, volume_label_annotate, seed_path)
     # edit_seed_1teeth_per_slice(volume_label_original, volume_label_annotate, seed_path)
     test_edit_seed_main(input_path, volume_label_annotate)  # これでアノテーションGUIが起動するので、そこで編集して保存する
