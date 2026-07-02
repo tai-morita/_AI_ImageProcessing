@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import os
+import sys
 import numpy as np
 import tifffile
 
-from .pipeline import PipelineResult, run_pipeline
-from .settings import DataLoadConfig
-from .SaveLoadedData import save_numpy
+try:
+    from .pipeline import PipelineResult, run_pipeline
+    from .settings import DataLoadConfig
+    from .SaveLoadedData import save_numpy
+except ImportError:
+    package_root = os.path.dirname(os.path.dirname(__file__))
+    if package_root not in sys.path:
+        sys.path.insert(0, package_root)
+    from DataLoad.pipeline import PipelineResult, run_pipeline
+    from DataLoad.settings import DataLoadConfig
+    from DataLoad.SaveLoadedData import save_numpy
 
 def load_data(config: DataLoadConfig | None = None, index: int = 0) -> PipelineResult:
     """Load and decode API data into arrays and metadata."""
@@ -23,7 +33,7 @@ def main(config: DataLoadConfig | None = None, index: int = 0) -> tuple[np.ndarr
         result.volume_rotated,
         result.label_map,
         extract_labels=[3, 4],
-        output_dir="./study/Watershed/Data/Input/20260312",
+        output_dir="./study/Watershed/Data/Input/20260624",
         index=index,
     )
     return result.volume_data.volume, result.volume_rotated, result.label_map
