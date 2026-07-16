@@ -5,3 +5,5 @@ Watershed/Data/
 __pycache__/
 *.pyc
 test/
+old/
+Watershed/t-oe/20260716_NR_Label/Tooth_label.npy

@@ -72,6 +72,7 @@ class GraphRev4Config:
         plot_execution_slice_graphs: 範囲グラフを保存するかどうか。
         show_graph_plots: グラフを画面表示するかどうか。
         run_watershed: watershed実行の有無。
+        auto_seed_area_threshold: 非分岐成分の自動seed追加を許可する最小面積閾値。
         enable_occlusal_alignment: 咬合平面一致の有無。
         occlusal_spacing_zyx: 咬合平面一致で用いるボクセル間隔。
         occlusal_percentile: 咬合面候補抽出百分位。
@@ -96,6 +97,7 @@ class GraphRev4Config:
     plot_execution_slice_graphs: bool = False
     show_graph_plots: bool = False
     run_watershed: bool = True
+    auto_seed_area_threshold: int = 100
 
     # Occlusal alignment
     enable_occlusal_alignment: bool = True
@@ -121,6 +123,7 @@ def graph_seed_volume_bidirectional(
     labels_connectivity: int = 2,
     inverse_volume: bool = True,
     direction_mode: str | None = None,
+    auto_seed_area_threshold: int = 100,
 ):
     """方向モードに応じてグラフseedを生成する。
 
@@ -130,6 +133,7 @@ def graph_seed_volume_bidirectional(
         labels_connectivity: 2D連結成分の近傍設定。
         inverse_volume: direction_mode未指定時の既定動作に使うフラグ。
         direction_mode: forward_only / reverse_only / bidirectional。
+        auto_seed_area_threshold: 非分岐成分の自動seed追加を許可する最小面積閾値。
 
     Returns:
         統合グラフ、seedボリューム、処理統計情報辞書。
@@ -175,7 +179,11 @@ def graph_seed_volume_bidirectional(
         raise ValueError("No valid direction mode selected.")
 
     non_bifurcating = detect_non_bifurcating_components(merged_graph)
-    added_seed_nodes = add_largest_area_seed_in_components(merged_graph, non_bifurcating)
+    added_seed_nodes = add_largest_area_seed_in_components(
+        merged_graph,
+        non_bifurcating,
+        area_threshold=int(auto_seed_area_threshold),
+    )
 
     for node in added_seed_nodes:
         if use_forward and graph_forward is not None and node in graph_forward:
@@ -205,6 +213,7 @@ def graph_seed_volume_bidirectional(
         "threshold": int(threshold),
         "inverse_volume": bool(inverse_volume),
         "direction_mode": direction_mode,
+        "auto_seed_area_threshold": int(auto_seed_area_threshold),
         "node_count": int(merged_graph.number_of_nodes()),
         "edge_count": int(merged_graph.number_of_edges()),
         "seed_voxel_count": int(np.count_nonzero(seed_volume)),
@@ -311,6 +320,7 @@ def _build_seed_for_jaw_region(
             labels_connectivity=config.labels_connectivity,
             inverse_volume=config.inverse_volume,
             direction_mode=direction_mode,
+            auto_seed_area_threshold=config.auto_seed_area_threshold,
         )
         relabeled_seed, next_seed_label = relabel_seed_volume(seed_volume, start_label=next_seed_label)
         combined_seed = merge_seed_non_overlap(combined_seed, relabeled_seed)
@@ -490,6 +500,7 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
             labels_connectivity=config.labels_connectivity,
             inverse_volume=config.inverse_volume,
             direction_mode=config.direction_mode,
+            auto_seed_area_threshold=config.auto_seed_area_threshold,
         )
 
         if config.plot_execution_slice_graphs:
@@ -569,8 +580,8 @@ def run_rev4_example():
     """
     config = GraphRev4Config(
         # input_path=r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test\edited_volume.tif",
-        input_path=r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test_rev2\lower_jaw.tif",
-        output_dir=r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test_rev2",
+        input_path=r"I:\TrainData\009\label_otsu_smooth_filled_aligned.tif",
+        output_dir=r"I:\TrainData\009\watershed_rev4_output",
         threshold=1000,
         anterior_threshold=1000,
         molar_threshold=2000,
@@ -579,10 +590,10 @@ def run_rev4_example():
         ambiguous_band_px=0.0,
         inverse_volume=True,
         direction_mode="forward_only", # forward_only / reverse_only / bidirectional
-        execution_slice_range=None,
-        plot_execution_slice_graphs=False,
-        show_graph_plots=False,
-        run_watershed=True,
+        execution_slice_range=(250, 500),
+        plot_execution_slice_graphs=True,
+        show_graph_plots=True,
+        run_watershed=False,
         enable_occlusal_alignment=True,
     )
     combined_seed, info = graph_main_anterior_molar_pca_rev4(config)
@@ -597,12 +608,13 @@ def run_rev4_example():
 
 if __name__ == "__main__":
     # ---- 実行設定（必要に応じてここを書き換える） ----
-    INPUT_PATH = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test_rev2\edited_volume.tif"
-    OUTPUT_DIR = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\test_rev2"
+    INPUT_PATH = r"I:\TrainData\007\label_editted.tif"
+    OUTPUT_DIR = r"I:\TrainData\007\watershed_rev4_output"
 
     # 0-based start:end（endは排他的）
-    LOWER_RANGE = (0, 237)
-    UPPER_RANGE = (154, 373)
+    LOWER_RANGE = (200, 420)
+    UPPER_RANGE = (420, 650)
+    # UPPER_RANGE = (0, 1)
 
     THRESHOLD = 1000
     ANTERIOR_THRESHOLD = 1000
@@ -629,10 +641,13 @@ if __name__ == "__main__":
         run_watershed=True,
         enable_occlusal_alignment=False,
     )
-
     run_pipeline_for_jaw_ranges(
         config=cfg,
         lower_range=LOWER_RANGE,
         upper_range=UPPER_RANGE,
         trim_keep_ratio=TRIM_KEEP_RATIO,
     )
+    """
+    run_rev4_example()
+    """
+    print("Done.")

@@ -39,16 +39,20 @@ def detect_non_bifurcating_components(graph: nx.Graph):
     return non_bifurcating
 
 
-def add_largest_area_seed_in_components(graph: nx.Graph, components):
+def add_largest_area_seed_in_components(graph: nx.Graph, components, area_threshold: int = 100):
     """seed未設定成分に対して最大面積ノードをseedに追加する。
 
     Args:
         graph: 変更対象グラフ。
         components: 連結成分ごとのノード集合。
+        area_threshold: 自動seed追加を許可する最小面積閾値。
 
     Returns:
         新規にseed追加したノード一覧。
     """
+    if area_threshold < 0:
+        raise ValueError(f"area_threshold must be >= 0: {area_threshold}")
+
     added_seed_nodes = []
     for component_nodes in components:
         if not component_nodes:
@@ -59,6 +63,10 @@ def add_largest_area_seed_in_components(graph: nx.Graph, components):
             continue
 
         target_node = max(component_nodes, key=lambda n: int(graph.nodes[n].get("area", 0)))
+        target_area = int(graph.nodes[target_node].get("area", 0))
+        if target_area <= area_threshold:
+            continue
+
         graph.nodes[target_node]["seed"] = True
         added_seed_nodes.append(target_node)
 
