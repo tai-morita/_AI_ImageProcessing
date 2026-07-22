@@ -286,17 +286,20 @@ def _build_seed_for_jaw_region(
     volume: np.ndarray,
     config: GraphRev4Config,
     direction_mode_override: str | None = None,
+    anterior_volume_mask: np.ndarray | None = None,
+    molar_volume_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """1顎ボリュームに対して前歯/臼歯分割ベースでseedを作成する。"""
     volume_mask = volume > 0
     anterior_threshold = config.threshold if config.anterior_threshold is None else config.anterior_threshold
     molar_threshold = config.threshold if config.molar_threshold is None else config.molar_threshold
 
-    anterior_volume_mask, molar_volume_mask, _, _, _ = split_volume_anterior_molar_by_pca(
-        volume,
-        split_percentile=config.split_percentile,
-        ambiguous_band_px=config.ambiguous_band_px,
-    )
+    if anterior_volume_mask is None or molar_volume_mask is None:
+        anterior_volume_mask, molar_volume_mask, _, _, _ = split_volume_anterior_molar_by_pca(
+            volume,
+            split_percentile=config.split_percentile,
+            ambiguous_band_px=config.ambiguous_band_px,
+        )
 
     combined_seed = np.zeros_like(volume, dtype=np.uint16)
     next_seed_label = 1
@@ -359,6 +362,22 @@ def run_pipeline_for_jaw_ranges(
         if not np.any(jaw_volume > 0):
             raise ValueError(f"No foreground voxel in {spec.name} range {spec.start_slice}:{spec.end_slice}")
 
+        anterior_volume_mask, molar_volume_mask, split_label_volume, split_line_xy, _ = split_volume_anterior_molar_by_pca(
+            jaw_volume,
+            split_percentile=config.split_percentile,
+            ambiguous_band_px=config.ambiguous_band_px,
+        )
+        split_labels_path = os.path.join(jaw_dir, f"{spec.name}_anterior_molar_split_labels.tif")
+        tiff.imwrite(split_labels_path, split_label_volume.astype(np.uint8))
+
+        split_overlay_volume = make_anterior_molar_split_overlay_volume(
+            volume=jaw_volume,
+            split_line_xy=split_line_xy,
+            line_radius_px=2,
+        )
+        split_overlay_path = os.path.join(jaw_dir, f"{spec.name}_anterior_molar_split_overlay.tif")
+        tiff.imwrite(split_overlay_path, split_overlay_volume, photometric="rgb")
+
         # 1) 顎のトリミングボリューム
         jaw_trimmed_volume_path = os.path.join(jaw_dir, f"{spec.name}_trimmed_volume.tif")
         tiff.imwrite(jaw_trimmed_volume_path, jaw_volume.astype(np.float32))
@@ -369,6 +388,8 @@ def run_pipeline_for_jaw_ranges(
             jaw_volume,
             config,
             direction_mode_override=jaw_direction_mode,
+            anterior_volume_mask=anterior_volume_mask,
+            molar_volume_mask=molar_volume_mask,
         )
         seed_before_path = os.path.join(jaw_dir, f"{spec.name}_seed_before_edit.tif")
         tiff.imwrite(seed_before_path, seed_before_edit.astype(np.uint16))
@@ -431,6 +452,8 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
         pad=config.occlusal_pad,
         inplane_k45=config.occlusal_inplane_k45,
     )
+    step2_aligned_path = os.path.join(config.output_dir, "step2_occlusal_aligned_volume.tif")
+    tiff.imwrite(step2_aligned_path, aligned_volume.astype(np.float32))
 
     execution_slice_mask, normalized_slice_range = create_execution_slice_mask(
         aligned_volume.shape[0],
@@ -461,6 +484,8 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
         os.path.join(config.output_dir, "anterior_molar_pca_split_labels.tif"),
         split_label_volume.astype(np.uint8),
     )
+    step3_split_labels_path = os.path.join(config.output_dir, "step3_pca_split_labels.tif")
+    tiff.imwrite(step3_split_labels_path, split_label_volume.astype(np.uint8))
 
     split_overlay_volume = make_anterior_molar_split_overlay_volume(
         volume=volume,
@@ -469,6 +494,8 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
     )
     split_overlay_path = os.path.join(config.output_dir, "anterior_molar_pca_split_overlay.tif")
     tiff.imwrite(split_overlay_path, split_overlay_volume, photometric="rgb")
+    step3_split_overlay_path = os.path.join(config.output_dir, "step3_pca_split_overlay.tif")
+    tiff.imwrite(step3_split_overlay_path, split_overlay_volume, photometric="rgb")
 
     region_boundary_slice_summary = summarize_region_boundary_slices_from_split_labels(
         split_label_volume
@@ -527,6 +554,8 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
     combined_seed[~volume_mask] = 0
     seed_path = os.path.join(config.output_dir, "combined_anterior_molar_seed_volume.tif")
     tiff.imwrite(seed_path, combined_seed.astype(np.uint16))
+    step5_seed_path = os.path.join(config.output_dir, "step5_combined_seed_volume.tif")
+    tiff.imwrite(step5_seed_path, combined_seed.astype(np.uint16))
 
     watershed_output_path = None
     if config.run_watershed:
@@ -554,6 +583,10 @@ def graph_main_anterior_molar_pca_rev4(config: GraphRev4Config):
         "execution_slice_range": normalized_slice_range,
         "plot_execution_slice_graphs": bool(config.plot_execution_slice_graphs),
         "graph_plot_paths": graph_plot_paths,
+        "step2_aligned_path": step2_aligned_path,
+        "step3_split_labels_path": step3_split_labels_path,
+        "step3_split_overlay_path": step3_split_overlay_path,
+        "step5_seed_path": step5_seed_path,
         "split_overlay_path": split_overlay_path,
         "region_boundary_slice_summary": region_boundary_slice_summary,
         "pca_split": pca_info,
@@ -608,12 +641,11 @@ def run_rev4_example():
 
 if __name__ == "__main__":
     # ---- 実行設定（必要に応じてここを書き換える） ----
-    INPUT_PATH = r"I:\TrainData\007\label_editted.tif"
-    OUTPUT_DIR = r"I:\TrainData\007\watershed_rev4_output"
-
+    INPUT_PATH = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\rotated_volume.tif"
+    OUTPUT_DIR = r"D:\_study\ImageProcessing\study\Watershed\Data\Output\20260722_No8"
     # 0-based start:end（endは排他的）
-    LOWER_RANGE = (200, 420)
-    UPPER_RANGE = (420, 650)
+    LOWER_RANGE = (0, 420)
+    UPPER_RANGE = (420, 841)
     # UPPER_RANGE = (0, 1)
 
     THRESHOLD = 1000
@@ -639,7 +671,7 @@ if __name__ == "__main__":
         inverse_volume=INVERSE_VOLUME,
         direction_mode=DIRECTION_MODE,
         run_watershed=True,
-        enable_occlusal_alignment=False,
+        enable_occlusal_alignment=True,
     )
     run_pipeline_for_jaw_ranges(
         config=cfg,
