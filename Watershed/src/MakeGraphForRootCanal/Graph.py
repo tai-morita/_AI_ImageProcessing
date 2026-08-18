@@ -7,22 +7,36 @@ from skimage import morphology
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
-import src
 
-from src.DataLoad import load_data
+from .DataLoad import load_data, save_volume
+from .LabeledRootCanal import labeled_for_root_canal
+
 
 debug = True
 
 # 重み付きグラフの作成
-def create_graph(volume: int, threshold: int, labels_connectivity: int =2):
+"""
+ノードは各スライスの Connected component とする。
+各ノードは (slice_index, label_number) というタプルで表される。
+    - label_number は各スライスでの 1 から始まる連番で、0 は背景を表す。
+各ノードには以下の属性が付与されている。
+    - area: 面積
+    - seed: Seed かどうかのフラグ (True/False)
+    - root_canal: 根管のラベル (True ならその番号, False なら 0)
+エッジは隣接するスライス間の Connected component の重なりに基づいて引かれる。
+エッジには以下の属性が付与されている。
+    - color: エッジの色 (赤: 切断候補, 青: 切断しない, 緑: 切断候補だが下の層に赤エッジがあるので切断しない)
+"""
+def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, labels_connectivity: int =2):
     G = nx.Graph()
     count = 0
     for index, curr_slice in enumerate(volume):
         # スライスは1始まりにする
         slice_index = index + 1
-
-        if debug and (slice_index >= 30 or slice_index < 12):
+        if debug and (slice_index >= 250 or slice_index < 0):
             continue
+
+        print(f"Processing slice {index + 1}/{volume.shape[0]}")
         count += 1
 
         # 表示用
@@ -41,16 +55,30 @@ def create_graph(volume: int, threshold: int, labels_connectivity: int =2):
         curr_labels, curr_label_numbers = ndi.label(curr_slice, structure=structure)
         for curr_label_number in range(1, curr_label_numbers+1):
             # 面積が属性となるため、ラベルごとに面積を計算する
-            label_area = np.sum(curr_labels == curr_label_number)
-            # 面積を属性としてノード(頂点)を追加
-            G.add_node((slice_index, curr_label_number), area = label_area, seed = False)
+            component_mask = (curr_labels == curr_label_number)
+            label_area = np.sum(component_mask)
+
+            # 根管のラベルを取得する
+            root_canal_labels = get_root_canal_labels_for_component(
+                component_mask=component_mask,
+                labeled_volume_rootcanal=labeled_volume_rootcanal[index],
+            )
+
+            # 面積, 根管のラベルを属性としてノード(頂点)を追加
+            G.add_node(
+                (slice_index, curr_label_number),
+                area=label_area,
+                seed=False,
+                root_canal=root_canal_labels
+            )
         if slice_index == 1 or count == 1:
             # 最初のスライスは直前のスライスがなくエッジが引けない
             continue
 
         # 直前のスライスと比較してエッジ(辺)を引く
-        prev_slice_index = index-1
-        prev_slice = volume[prev_slice_index]
+        prev_array_index = index-1
+        prev_slice_index = slice_index- 1
+        prev_slice = volume[prev_array_index]
         prev_labels, prev_label_numbers = ndi.label(prev_slice, structure=structure)
 
         # 直前のスライスと重なっているところ = 同じ歯が表示されているとみなしてエッジを引く
@@ -73,15 +101,19 @@ def create_graph(volume: int, threshold: int, labels_connectivity: int =2):
             次の条件を満たす場合はエッジ切断候補 (切断候補の直前のノードを Seed とする)
             1. 重なっているノードが 2 つ以上ある
             2. 重なっているノードの面積がすべて閾値以上 (細かいノイズは除去されている前提?)
+            X. 重なるノード A, B で異なる根管ラベルを保持している
             """
             edge_color = "red" # 切断しないエッジは青、切断するエッジ(Seed 候補)は赤
             # 重なっているノードが1つの場合は切断しない
             if len(overlap_label_numbers) > 1:
+                root_canal_labels_set = set()
                 for overlap_label_number in overlap_label_numbers:
-                    # すべてのノードが閾値を超えている場合のみ切断候補とする
-                    if threshold > G.nodes[(prev_slice_index, overlap_label_number)]["area"]:
-                        # 1 つでも閾値未満のものがあれば切断しない
-                        edge_color = "blue"
+                    # 各ノードの根管ラベルを取得する
+                    prev_root_canal_labels = G.nodes[(prev_slice_index, overlap_label_number)]["root_canal"]
+                    root_canal_labels_set.update(prev_root_canal_labels)
+                    # 根管ラベルが異なる場合は切断候補とする
+                    if len(root_canal_labels_set) > 1:
+                        edge_color = "red"
                         break
             else:
                 edge_color = "blue"
@@ -89,15 +121,32 @@ def create_graph(volume: int, threshold: int, labels_connectivity: int =2):
             for overlap_label_number in overlap_label_numbers:
                 overlap_label_number = int(overlap_label_number)
                 if ((slice_index, curr_label_number) in G)\
-                and ((slice_index-1, overlap_label_number)) in G:
+                and ((prev_slice_index, overlap_label_number)) in G:
                     G.add_edge(
                         (slice_index, curr_label_number),
-                        (slice_index-1, overlap_label_number),
+                        (prev_slice_index, overlap_label_number),
                         color = edge_color
                     )
 
     return G
 
+def get_root_canal_labels_for_component(component_mask: np.ndarray, labeled_volume_rootcanal: np.ndarray) -> list[int]:
+    """
+    component_mask: ある connected component の True/False のマスク画像 (2D)
+    labeled_volume_rootcanal: root canal のラベル画像 (背景は 0)
+
+    Returns:
+        component_mask と重なっている root canal ラベルの一覧
+        例: [3] or [3, 7] or []
+    """
+    # component_mask と labeled_volume_rootcanal の形状が一致しているか確認する
+    if component_mask.shape != labeled_volume_rootcanal.shape:
+        raise ValueError(f"component_mask と labeled_volume_rootcanal の形状が一致しません: component_mask.shape={component_mask.shape}, labeled_volume_rootcanal.shape={labeled_volume_rootcanal.shape}")
+    # 成分と重なる根管ラベルがなければ、空のリストを返す
+    overlapped = np.unique(labeled_volume_rootcanal[component_mask])
+    overlapped = overlapped[overlapped != 0]
+
+    return overlapped.astype(int).tolist()
 
 def find_red_edge_previous_node(G, start_node):
     # start_node 以下のスライスをエッジをたどって探索していき、赤ノードがないかを探す
@@ -158,7 +207,21 @@ def plot_graph(G: nx):
         else:
             pos[node] = (label, slice_index) # x:スライス順, y:ラベル番号で上下にずらす
 
-    plt.figure(figsize=(12, 20))
+    # plt.figure(figsize=(12, 20))
+    slice_numbers = [node[0] for node in G.nodes]
+    label_numbers = [
+        node[1]
+        for node in G.nodes
+        if node[1] != "slice_index"
+    ]
+
+    slice_count = len(set(slice_numbers))
+    max_labels_per_slice = max(label_numbers, default=1)
+
+    figure_width = max(12, max_labels_per_slice * 1.5)
+    figure_height = max(8, slice_count * 0.6)
+
+    plt.figure(figsize=(figure_width, figure_height))
 
     # 描画するものを決める
     labels = {}
@@ -167,8 +230,8 @@ def plot_graph(G: nx):
         if node[1] == 'slice_index':
             labels[node] = f"slice {node[0]}"
         else:
-            # メインは面積
-            labels[node] = f"{G.nodes[node]['area']}"
+            # ノードのラベルは面積と根管のラベルを表示する
+            labels[node] = f"{G.nodes[node]['area']}: {G.nodes[node]['root_canal']}"
             continue
 
     # ノードの色を決める。 Seed は赤く表示する
@@ -191,7 +254,13 @@ def plot_graph(G: nx):
             node_color=node_colors,
             edge_color=edge_colors)
 
-    plt.show()
+
+    # plt.show()
+    if debug:
+        save_path = r"D:\_study\ImageProcessing\study\Watershed\temp\graph.png"
+        plt.savefig(save_path, dpi=300)
+        print(f"Graph saved to {save_path}")
+
 
 def test_connected_component(input_path):
     volume = load_data(input_path)
@@ -216,12 +285,20 @@ def test_connected_component(input_path):
     plt.title("Connected component area by slice")
 
     plt.show()
+    if debug:
+        plt.savefig(r"D:\_study\ImageProcessing\study\Watershed\temp\connected_component_area_by_slice.png", dpi=300)
 
 if __name__ == "__main__":
     
-    input_path = r"C:\Users\morit\Desktop\work\study\Watershed\Data\Input\20260313_test\label_map_1_annotate.tif"
-    test_connected_component(input_path)
-    # volume = load_data(input_path)
-    # G = create_graph(volume, 500)
-    # find_previous_red_edge(G)
-    # plot_graph(G)
+    input_path = r"D:\_study\ImageProcessing\study\Watershed\t-oe\20260716_NR_Label\CTHRs_50_label_binary.tif"
+    # test_connected_component(input_path)
+
+    # root canal のラベルをツクル
+    volume = load_data(input_path)
+    labeled_root_canal = labeled_for_root_canal(volume=volume, target_value=1)
+    G = create_graph(volume, labeled_root_canal)
+    find_previous_red_edge(G)
+    plot_graph(G)
+    """
+    """
+    
