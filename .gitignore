@@ -10,3 +10,4 @@ Watershed/t-oe/20260716_NR_Label/Tooth_label.npy
 *.tif
 *.npy
 temp/
+*.html
