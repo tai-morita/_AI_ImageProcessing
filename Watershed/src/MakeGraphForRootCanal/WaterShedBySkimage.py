@@ -10,8 +10,8 @@ from .DataLoad import load_data, save_volume
 def watershed_3d_tiff(volume          : np.ndarray, 
                       seed_volume     : np.ndarray, 
                       output_path     : str,
-                      connectivity    : int = 6,
-                      debug_dist_path : str = None) -> None:
+                      connectivity    : int = 26,
+                      debug_dist_path : str = None) -> np.ndarray:
     # インプット: 歯のみの画像, マーカー
     volume = util.img_as_float(volume)
 
@@ -37,7 +37,7 @@ def watershed_3d_tiff(volume          : np.ndarray,
         -dist,  # 中心が谷になるように負の距離を使う
         markers=seed_volume,
         mask=volume > 0,
-        connectivity=connectivity,  # 3Dの6近傍
+        connectivity=connectivity,  # 3Dの26近傍
         watershed_line=False
     )
 
@@ -55,8 +55,7 @@ def watershed_3d_tiff(volume          : np.ndarray,
     color_out = base + '_color' + ext
     save_colorized_labels(labels, color_out)
 
-    return print("Done.")
-
+    return labels
 
 def dist_seed(volume: np.ndarray, seed_volume: np.ndarray) -> np.ndarray:
     """前景領域の各ボクセルから最も近いseedまでの距離を返す。
