@@ -14,18 +14,14 @@ def load_data(input_file_path: str):
     return volume
 
 def save_volume(output_file_path: str, volume: np.ndarray, dtype=None):
-    print(f"save file: {output_file_path}")
+    if dtype is None:
+        dtype = volume.dtype
+    print(f"dtype: {dtype}, save file: {output_file_path}")
     file_name, file_ext = os.path.splitext(output_file_path)
     if file_ext == ".tif":
-        if dtype is not None:
-            volume = tifffile.imwrite(output_file_path, volume.astype(dtype))
-        else:
-            volume = tifffile.imwrite(output_file_path, volume)
+        volume = tifffile.imwrite(output_file_path, volume.astype(dtype))
     elif file_ext == ".npy":
-        if dtype is not None:
-            volume = np.save(output_file_path, volume.astype(dtype))
-        else:
-            volume = np.save(output_file_path, volume)
+        volume = np.save(output_file_path, volume.astype(dtype))
     else:
         raise ValueError(f"対応していないファイル形式です: file_name: {file_name}, file_ext: {file_ext}")
 
