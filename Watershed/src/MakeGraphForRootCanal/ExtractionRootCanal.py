@@ -66,7 +66,9 @@ def analyze_histogram(volume):
         print("Rising start was not detected.")
     else:
         print(f"Rising start: index={start_index}, intensity={bin_centers[start_index]:.3f}, slope threshold={dynamic_threshold:.3f}")
-    return bin_centers[start_index] if start_index is not None else None
+    bin_buffer = 0
+
+    return bin_centers[start_index - bin_buffer] if start_index is not None else None
 
 def find_rising_start(bin_centers, counts, smoothing_sigma=2, consecutive_bins=3):
     """

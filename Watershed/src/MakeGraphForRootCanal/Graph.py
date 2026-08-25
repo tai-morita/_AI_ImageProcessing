@@ -12,7 +12,7 @@ from .DataLoad import load_data, save_volume
 from .LabeledRootCanal import labeled_for_root_canal
 
 
-debug = True
+debug = False
 
 # 重み付きグラフの作成
 """
@@ -26,22 +26,20 @@ debug = True
 エッジは隣接するスライス間の Connected component の重なりに基づいて引かれる。
 エッジには以下の属性が付与されている。
     - color: エッジの色 (赤: 切断候補, 青: 切断しない, 緑: 切断候補だが下の層に赤エッジがあるので切断しない)
+
 """
-def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, labels_connectivity: int =2):
+def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, labels_connectivity: int =2, direction: str = "down") -> nx.Graph:
     G = nx.Graph()
     count = 0
+    edge_cut = True
     for index, curr_slice in enumerate(volume):
         # スライスは1始まりにする
         slice_index = index + 1
-        if debug and (slice_index >= 250 or slice_index < 0):
+        if debug and (slice_index >= 400 or slice_index < 0):
             continue
 
         print(f"Processing slice {index + 1}/{volume.shape[0]}")
         count += 1
-
-        # 表示用
-        # 一番左にスライス番号を表示する
-        G.add_node((slice_index, 'slice_index'), seed=False)
 
         """
         rank 次元の連結成分とみなす bool 値が入る
@@ -50,9 +48,11 @@ def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, label
         True  True True
         False True False
         """
+
         structure = ndi.generate_binary_structure(rank=2, connectivity=labels_connectivity)
         # structure 近傍を隣接画素としてラベル付けをする
         curr_labels, curr_label_numbers = ndi.label(curr_slice, structure=structure)
+
         for curr_label_number in range(1, curr_label_numbers+1):
             # 面積が属性となるため、ラベルごとに面積を計算する
             component_mask = (curr_labels == curr_label_number)
@@ -95,7 +95,6 @@ def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, label
             overlap_label_numbers = np.unique(prev_labels[curr_labels == curr_label_number])
             overlap_label_numbers = overlap_label_numbers[overlap_label_numbers != 0]
 
-
             # スライス間で重なっているノードにはエッジを引く
             """
             次の条件を満たす場合はエッジ切断候補 (切断候補の直前のノードを Seed とする)
@@ -103,9 +102,10 @@ def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, label
             2. 重なっているノードの面積がすべて閾値以上 (細かいノイズは除去されている前提?)
             X. 重なるノード A, B で異なる根管ラベルを保持している
             """
-            edge_color = "red" # 切断しないエッジは青、切断するエッジ(Seed 候補)は赤
+            edge_color = "blue" # 切断しないエッジは青、切断するエッジ(Seed 候補)は赤
             # 重なっているノードが1つの場合は切断しない
             if len(overlap_label_numbers) > 1:
+                """
                 root_canal_labels_set = set()
                 for overlap_label_number in overlap_label_numbers:
                     # 各ノードの根管ラベルを取得する
@@ -115,8 +115,8 @@ def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, label
                     if len(root_canal_labels_set) > 1:
                         edge_color = "red"
                         break
-            else:
-                edge_color = "blue"
+                """
+                edge_color = "red"
             # 重なっているノードでエッジを引く
             for overlap_label_number in overlap_label_numbers:
                 overlap_label_number = int(overlap_label_number)
@@ -127,8 +127,71 @@ def create_graph(volume: np.ndarray, labeled_volume_rootcanal: np.ndarray, label
                         (prev_slice_index, overlap_label_number),
                         color = edge_color
                     )
+                    # 根管ラベルは、前スライスの根管ラベルを追加する
+                    prev_root_canal_labels = G.nodes[(prev_slice_index, overlap_label_number)]["root_canal"]
+                    root_canal_labels = G.nodes[(slice_index, curr_label_number)]["root_canal"]
+                    root_canal_labels.extend(prev_root_canal_labels)
+                    G.nodes[(slice_index, curr_label_number)]["root_canal"] = list(dict.fromkeys(root_canal_labels))
+        # 表示用
+        # 一番左にスライス番号を表示する
+        G.add_node((slice_index, 'slice_index'), seed=False)
 
     return G
+
+def edge_cut(G: nx.Graph, direction: str = "down"):
+    """
+    グラフのエッジを切断する。
+    エッジの切断候補は赤になっているので、切断条件を満たさない場合は緑にする。
+    切断判定:
+        - 前後スライスでのノードが重なっている
+        - 重なっているノードの根管ラベルが異なる場合は切断する
+        - 切断候補以下のエッジで赤いエッジがある場合は切断しない (緑にする)
+            - 例1:
+            - node: slice 1: A, B, slice 2: C
+            - edge: (A, C), (B, C)
+            - (A, C), (B, C) どちらも切断候補
+            - 例2:
+            - node: slice 1: A, B, slice 2: C, D, slice3: E
+            - edge: (A, C), (B, C), (C, E), (D, E)
+            - (A, C), (B, C), (D, E) が切断候補
+            - (C, E) は切断候補だが、下の層に赤いエッジがあるので切断しない (緑にする)
+    Parameters:
+        G: nx.Graph
+        direction: "down" or "up"
+            - "down": 上から下に探索する
+            - "up": 下から上に探索する
+    """
+    for node1, node2, attr in G.edges(data=True):
+        # スライス番号を取得し、前後スライスのノードであることを確認する
+        slice_index1 = G.nodes[node1].get("slice_index", node1[0])
+        slice_index2 = G.nodes[node2].get("slice_index", node2[0])
+        if slice_index1 == slice_index2:
+            # 同じスライスのノード同士は無視する (ここに来ないはず)
+            continue
+        if slice_index1 > slice_index2:
+            prev_node = node2
+            curr_node = node1
+        else:
+            prev_node = node1
+            curr_node = node2
+        
+        if attr.get("color") == "red":
+            # 切断候補のエッジを確認する
+            # 前後スライスのノードの根管ラベルを取得する
+            prev_node_root_canal = G.nodes[prev_node]["root_canal"]
+            curr_node_root_canal = G.nodes[curr_node]["root_canal"]
+            # 根管ラベルを比較し、同じ場合は切断しない (緑にする)
+            if set(prev_node_root_canal) == set(curr_node_root_canal):
+                G.edges[node1, node2]["color"] = "green"
+                continue
+            # 根管ラベルが異なる場合は切断したい
+            # 下の層に赤いエッジがあるか確認する
+            if find_red_edge_previous_node(G, prev_node, direction=direction):
+                # 赤いエッジがある場合は切断しない (緑にする)
+                G.edges[node1, node2]["color"] = "green"
+                continue
+
+
 
 def get_root_canal_labels_for_component(component_mask: np.ndarray, labeled_volume_rootcanal: np.ndarray) -> list[int]:
     """
@@ -148,7 +211,7 @@ def get_root_canal_labels_for_component(component_mask: np.ndarray, labeled_volu
 
     return overlapped.astype(int).tolist()
 
-def find_red_edge_previous_node(G, start_node):
+def find_red_edge_previous_node(G, start_node, direction: str = "down") -> bool:
     # start_node 以下のスライスをエッジをたどって探索していき、赤ノードがないかを探す
     # return true: 赤エッジない, false: 赤エッジある
     visited_node = set() # 探索済みのノード
@@ -163,9 +226,14 @@ def find_red_edge_previous_node(G, start_node):
 
         # 隣接したノードを探索する
         for neighbor_node in G.neighbors(node):
-            # スライス番号が小さいもののみ探索する
-            if neighbor_node[0] > node[0]:
-                continue
+            if direction == "down":
+                # スライス番号が小さいもののみ探索する
+                if neighbor_node[0] > node[0]:
+                    continue
+            elif direction == "up":
+                # スライス番号が大きいもののみ探索する
+                if neighbor_node[0] < node[0]:
+                    continue
             # エッジが赤なら終了
             if G[node][neighbor_node].get("color") == "red":
                 return True
@@ -185,7 +253,7 @@ def find_previous_red_edge(G: nx):
                 reverse=True):
         if attr.get("color") == "red":
             # 赤いエッジが見つかった
-            if (find_red_edge_previous_node(G, previous_node)):
+            if (find_red_edge_previous_node(G, previous_node, direction="down")):
                 # それ以下のエッジで赤いものがあったので、緑に変更する
                 G.edges[current_node, previous_node]["color"] = "green"
                 continue
@@ -197,7 +265,7 @@ def find_previous_red_edge(G: nx):
                 continue
 
 # グラフの描画
-def plot_graph(G: nx):
+def plot_graph(G: nx, save_path: str = None):
     pos = {}
     for node in G.nodes:
         slice_index, label = node
@@ -256,8 +324,7 @@ def plot_graph(G: nx):
 
 
     # plt.show()
-    if debug:
-        save_path = r"D:\_study\ImageProcessing\study\Watershed\temp\graph.png"
+    if save_path:
         plt.savefig(save_path, dpi=300)
         print(f"Graph saved to {save_path}")
 
@@ -285,20 +352,30 @@ def test_connected_component(input_path):
     plt.title("Connected component area by slice")
 
     plt.show()
-    if debug:
-        plt.savefig(r"D:\_study\ImageProcessing\study\Watershed\temp\connected_component_area_by_slice.png", dpi=300)
+    if True:
+        plt.savefig(r"./study/Watershed/temp/connected_component_area_by_slice.png", dpi=300)
+
 
 if __name__ == "__main__":
     
-    input_path = r"D:\_study\ImageProcessing\study\Watershed\t-oe\20260716_NR_Label\CTHRs_50_label_binary.tif"
-    # test_connected_component(input_path)
-
+    volume_path = r"./study/Watershed/t-oe/20260716_NR_Label/test/Label1/Label1.tif"
+    root_canal_path = r"./study/Watershed/t-oe/20260716_NR_Label/test/Label1/CTHRs_100_Label1_ternary.tif"
     # root canal のラベルをツクル
-    volume = load_data(input_path)
-    labeled_root_canal = labeled_for_root_canal(volume=volume, target_value=1)
+    volume = load_data(volume_path)
+    root_canal = load_data(root_canal_path)
+    labeled_root_canal = labeled_for_root_canal(volume=root_canal, target_value=1)
     G = create_graph(volume, labeled_root_canal)
-    find_previous_red_edge(G)
-    plot_graph(G)
+    # find_previous_red_edge(G)
+    # edge_cut(G, direction="up")
+    plot_graph(G, save_path=r"./study/Watershed/temp/graph.png")
+
+    from collections import Counter
+    edge_color_counts = Counter(
+        attributes.get("color", "black")
+        for _, _, attributes in G.edges(data=True)
+    )
+    print(f"赤エッジ: {edge_color_counts['red']}")
+    print(f"緑エッジ: {edge_color_counts['green']}")
     """
     """
     

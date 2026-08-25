@@ -1,8 +1,9 @@
 # Root Canal を Seed にして Watershed を実行するテスト
 import numpy as np
 from ..WaterShed_main import watershed_3d_tiff
+from scipy import ndimage as ndi
 
-def edit_root_canal(labeled_root_canal: np.ndarray) -> np.ndarray:
+def edit_root_canal(labeled_root_canal: np.ndarray, tooth_labeled_volume: np.ndarray) -> np.ndarray:
     """
     ラベル付きの根管領域を編集する。
     0 を背景として除外し、ラベルごとのサイズ分布に大きな飛びがある箇所を境界として外れ値を除去する。
@@ -34,12 +35,23 @@ def edit_root_canal(labeled_root_canal: np.ndarray) -> np.ndarray:
     threshold = counts[boundary_idx + 1]
 
     # 閾値未満のラベルは背景化
-    valid_labels = unique_labels[counts >= threshold]
-    edited_root_canal = np.zeros_like(labeled_root_canal)
-    for label in valid_labels:
-        edited_root_canal[labeled_root_canal == label] = label
+    valid_labels = unique_labels[counts <= threshold]
 
-    return relabel_without_zero(edited_root_canal)
+    # ラベルが枠外に出ている、つまり 0, 1 or 最大スライス存在している or 背景に接しているラベルは対象外とする
+    adjacent_background_list = check_adjacent_root_background(labeled_root_canal, tooth_labeled_volume)
+    adjant_axial_list = check_adjacent_root_axial(labeled_root_canal)
+    exception_edit_root_canal_labels = list(set(adjacent_background_list + adjant_axial_list))
+
+    edit_labels = labeled_root_canal.copy()
+    print(f"編集対象のラベル: {valid_labels}, 編集対象外のラベル: {exception_edit_root_canal_labels}")
+    for edit_label in valid_labels:
+        if edit_label in exception_edit_root_canal_labels:
+            continue  # 編集対象外のラベルはスキップ
+        edit_labels[edit_labels == edit_label] = 0  # 背景化
+
+    print(f"編集後のラベル数: {len(np.unique(edit_labels)) - 1} (背景を除く)")
+
+    return relabel_without_zero(edit_labels)
 
 # ラベル数が 0 のものを除外して、ラベルを 1 から順に振り直す
 def relabel_without_zero(arr: np.ndarray) -> np.ndarray:
@@ -50,23 +62,43 @@ def relabel_without_zero(arr: np.ndarray) -> np.ndarray:
         arr[arr == old_label] = new_label
 
     return arr
-from scipy import ndimage as ndi
+
+def check_adjacent_root_axial(labeled_root_canal: np.ndarray) -> list:
+    """
+    Axial 方向で見切れているか判定する。 0, 1, max-1, max のスライスで根管ラベルが背景と接触している場合は見切れていると判定する。
+    Parameters:
+        labeled_root_canal (np.ndarray): ラベル付きの根管領域
+    Returns:
+        list: 背景と接触している根管ラベルのリスト
+    """
+    slice_indexes_to_check = [0, 1, labeled_root_canal.shape[0] - 2, labeled_root_canal.shape[0] - 1]
+    contacting_root_numbers = []
+    for slice_index in slice_indexes_to_check:
+        # このスライスにラベルがあれば接触対象となる
+        labeled_numbers = np.unique(labeled_root_canal[slice_index])
+        labeled_numbers = labeled_numbers[labeled_numbers != 0]  # 背景は除外
+        for root_number in labeled_numbers:
+            contacting_root_numbers.append(int(root_number))
+    contacting_root_numbers = list(set(contacting_root_numbers))  # 重複を除外
+    return contacting_root_numbers
 
 def check_adjacent_root_background(
     labeled_root_canal: np.ndarray,
+    tooth_labeled_volume: np.ndarray
     ) -> list:
     """
     根管ラベルが背景と隣接しているかどうかを判定する。
 
     Parameters:
         labeled_root_canal (np.ndarray): ラベル付きの根管領域
+        tooth_labeled_volume (np.ndarray): ラベル付きの歯領域
 
     Returns:
         list: 背景と接触している根管ラベルのリスト
     """
     root_mask = labeled_root_canal > 0
     root_numbers = np.unique(labeled_root_canal[root_mask])
-    background_mask = labeled_root_canal == 0
+    background_mask = tooth_labeled_volume == 0
 
     # 6近傍: z, y, x の各軸に直交する隣接ボクセルだけを対象にする
     structure = ndi.generate_binary_structure(rank=3, connectivity=1)
@@ -83,7 +115,6 @@ def check_adjacent_root_background(
         if np.any(adjacent_background):
             contacting_root_numbers.append(int(root_number))
             break  # 1つでも接触していれば十分なので、ループを抜ける
-    print(f"背景と接触している根管ラベル: {contacting_root_numbers}")
 
     return contacting_root_numbers
 

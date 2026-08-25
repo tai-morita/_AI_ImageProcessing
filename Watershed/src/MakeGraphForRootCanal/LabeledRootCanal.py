@@ -1,14 +1,14 @@
-# 根管を領域拡張を用いて抽出する
 import numpy as np
 from scipy import ndimage as ndi
 
-def labeled_for_root_canal(volume: np.ndarray, target_value: int = 1) -> np.ndarray:
+def labeled_for_root_canal(volume: np.ndarray, target_value: int = 1, dilation_iterations: int = 5) -> np.ndarray:
     """
-    こんかんのラベル付け
+    根管のラベル付け
 
     Parameters:
         volume (np.ndarray): 入力の3D画像データ
         target_value (int) : 抽出対象の値（現状 1）
+        dilation_iterations (int): 膨張の反復回数（デフォルトは 5）
 
     Returns:
         np.ndarray: ラベル付きの3D画像データ
@@ -20,7 +20,7 @@ def labeled_for_root_canal(volume: np.ndarray, target_value: int = 1) -> np.ndar
 
     return label_nearby_regions(
         volume == target_value,
-        dilation_iterations=5,
+        dilation_iterations=dilation_iterations,
     )
 
 
