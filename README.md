@@ -258,81 +258,31 @@ testデータの10ファイルはtif形式で保存できた
     - 隣接スライスは根管がいないことが多い。どう属性を加えるか検討する必要あり
 - やること
   - いい具合に根管の属性を保ちながら、臼歯部の隣接と歯の隣接条件を見極める。
+# 2026/09/02
+- 根管を seed　にすることでうまくいった。
+- 見切れている関係で抜き取れない歯は、根管の seed がないので、 Watershed で抽出されない。
+  - つまり存在しない歯となる。
+- -> 見切れている歯がある場合の処理を追加する?
 
-## 根管を Seed に使う場合
-- 前提条件
-  - 根管がつながっていること
-
-### 仕様
-- 最終目標
-  - Watershed を自動化して自動アノテーションをする
-- input 画像
-  - 歯のみ抽出された画像
-- seed画像
-  - ラベリングされた画像
-    - 同一の歯は同一のラベリングがされていること
-  - seed の準備
-    - 1. ImageJ で1データ1歯でのアノテーションをする (黒)
-    - 2. 二値化して反転する(背景+アノテーション領域を255にする)
-    - 3. 連結成分を抽出する
-    - 4. すべての成分を同じ値にする (1データ1歯のため)
-
-- Seed 作成仕様 (2026/07/06)
-  - 上顎・下顎をスライス番号で分割 (手入力)
-  - 上顎・下顎でそれぞれ PCA を行い、前歯部・臼歯部の分割線を引く
-  - (上顎・下顎, 前歯・臼歯)で Graph を用いた Seed 候補を選定する
-    - Connected Component ごとに前後スライスの包含関係を見る
-    - 統合する領域が閾値以上かつそれ以前のスライスで Seed 候補がいない場合、 Seed 候補とする
-  - 50% くらい縮小して、楕円フィッティングする
-- Seed 作成仕様 (copilot)
-  - 対象コード
-    - Watershed/src/graph_rev4/pipeline.py
-
-  - ルートA: run_pipeline_for_jaw_ranges (上顎/下顎を明示して実行)
-    - 1. 入力ボリュームを読み込む
-      - load_volume(config.input_path)
-    - 2. lower_jaw, upper_jaw のスライス範囲ごとに処理する
-      - jaw_volume = original_volume[start:end]
-    - 3. Seed 作成 (edit前)
-      - _build_seed_for_jaw_region を実行
-      - 内部で前歯/臼歯へPCA分割し、各領域で graph_seed_volume_bidirectional を実行
-      - 生成した seed をラベル振り直しして結合
-      - 出力: *_seed_before_edit.tif
-    - 4. Seed 編集 (edit後)
-      - seed>0 を対象に、各スライスで距離変換上位 keep_ratio の領域のみ残す
-      - _trim_volume_by_top_far_region(..., keep_ratio=0.5)
-      - その後 _relabel_components_per_slice で再ラベリング
-      - 出力: *_seed_after_edit.tif
-    - 5. 顎ごとに Watershed を実行
-      - watershed_3d_volume(volume=jaw_volume, seed_volume=seed_after_edit)
-      - 出力: *_watershed.tif
-    - 6. 上下顎 seed を全体座標で結合し、全体 Watershed も実行
-      - combined_jaw_seed_after_edit.tif
-      - combined_jaw_watershed.tif
-
-  - ルートB: graph_main_anterior_molar_pca_rev4 (単一ボリューム実行)
-    - 1. 入力読み込み
-    - 2. （必要時）咬合平面アライメント
-      - align_occlusal_plane
-    - 3. 実行スライス範囲マスク適用
-      - create_execution_slice_mask / apply_execution_slice_mask
-    - 4. PCAで前歯/臼歯に分割
-      - split_volume_anterior_molar_by_pca
-      - 出力: anterior_molar_pca_split_labels.tif
-    - 5. 各領域でグラフseed生成
-      - graph_seed_volume_bidirectional
-      - remove_edge で枝刈り
-      - detect_non_bifurcating_components + add_largest_area_seed_in_components で seed 補完
-      - create_seed_for_watershed
-    - 6. 前歯/臼歯 seed を再ラベルして統合
-      - 出力: combined_anterior_molar_seed_volume.tif
-    - 7. Watershed 実行
-      - watershed_3d_volume(volume, combined_seed)
-      - 出力: watershed_anterior_molar_rev4.tif
-    - 8. 実行情報をJSON保存
-      - rev4_pca_graph_watershed_info.json
-
-  - 備考
-    - direction_mode は forward_only / reverse_only / bidirectional を選択可能
-    - run_pipeline_for_jaw_ranges では upper_jaw の seed 作成時のみ reverse_only を強制
-    - run_pipeline_for_jaw_ranges の trim_keep_ratio=0.5 が現在の seed 編集パラメータ
+- 仕様
+  - input: 
+    - 歯の抽出ボリューム
+  - output: 
+    - 歯の分割ボリューム
+  - 処理
+    - 歯の抽出ボリュームから閾値を決める
+      - ボリュームデータのヒストグラムでは、根管-象牙質-エナメル質という順で輝度値が存在しており、プロファイルは 平坦部 - 増加部 - 減少部 - 平坦部 というデータになっている
+      - その中から平坦部を検出し、閾値とする。閾値以下の値が根管とする
+    - ノイズ等で誤検出される、不連続な検出となることを防ぐため、根管データを編集し、ラベル付けする
+      - データの編集
+        - ラベル付けされた根管の体積を求め、対数変換をする
+        - 体積の少ないラベルを検出し、削除する
+        - 削除後、周囲 5 ボクセル以内に別ラベルのデータがある場合は、それらを同一ラベルとして扱う
+    - 歯の隣接状況と、根管のラベルを基準としてグラフを作成し、 Seed を作成する
+      - グラフ作成
+        - ノードには以下の情報を付与する
+          - スライス番号、そのスライスでのラベル番号、Seedであるか、根管のラベル番号
+        - 前後スライスで隣接しているノードにエッジを引く
+    - 以下の条件を満たすノードに対応するラベル番号を Seed にする
+      - 前後スライスで二股に分かれているノード、かつそれ以前のスライスで二股に分かれていない
+    - 上記 Seed で Watershed を実行する
