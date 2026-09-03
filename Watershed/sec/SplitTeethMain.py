@@ -64,6 +64,7 @@ def main(label_number: int = 1,
     extracted_volume = overlay_extra_tooth(volume, teeth_binary)
     if True:
         save_volume(os.path.join(output_dir, os.path.splitext(volume_file)[0] + "_overlay.tif"), extracted_volume, dtype=np.uint16)
+
     # Step3: Overlay 画像から、疑似 CT 値 のプロファイルから根管の閾値を決定し、二値化で根幹を抽出する
     root_canal_binary, threshold = extract_root_canal(extracted_volume)
     if debug:
