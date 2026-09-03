@@ -1,13 +1,10 @@
-Watershed/Tooth/Data/
-venv/
-Watershed/Data/
-Watershed/Data/
 __pycache__/
-*.pyc
+temp/
 test/
 old/
-Watershed/t-oe/20260716_NR_Label/Tooth_label.npy
+ToothSplit/venv/
+
+*.pyc
 *.tif
 *.npy
-temp/
 *.html
