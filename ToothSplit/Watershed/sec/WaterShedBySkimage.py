@@ -9,7 +9,7 @@ from .DataLoad import load_data, save_volume
 
 def watershed_3d_tiff(volume          : np.ndarray, 
                       seed_volume     : np.ndarray, 
-                      output_path     : str,
+                      output_path     : str = None,
                       connectivity    : int = 26,
                       debug_dist_path : str = None) -> np.ndarray:
     # インプット: 歯のみの画像, マーカー
@@ -42,18 +42,19 @@ def watershed_3d_tiff(volume          : np.ndarray,
     )
 
     # --- 6) 保存（uint16グレースケール & カラー）---
-    print(f"ラベル数: {labels.max()}")  # デバッグ用
-    # グレースケール保存（uint16）
-    if not os.path.exists(os.path.dirname(output_path)):
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    save_volume(output_path, labels.astype(np.uint16))
-    print(f"Saved: {output_path}")
-    print(f"形状: {labels.shape}, データ型: {labels.dtype}")  # デバッグ用
-    for i in range(1, labels.max() + 1):
-        print(f"ラベル {i}: ボクセル数 = {np.sum(labels == i)}")  # デバッグ用
-    base, ext = os.path.splitext(output_path)
-    color_out = base + '_color' + ext
-    save_colorized_labels(labels, color_out)
+    if output_path:
+        print(f"ラベル数: {labels.max()}")  # デバッグ用
+        # グレースケール保存（uint16）
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        save_volume(output_path, labels.astype(np.uint16))
+        print(f"Saved: {output_path}")
+        print(f"形状: {labels.shape}, データ型: {labels.dtype}")  # デバッグ用
+        for i in range(1, labels.max() + 1):
+            print(f"ラベル {i}: ボクセル数 = {np.sum(labels == i)}")  # デバッグ用
+        base, ext = os.path.splitext(output_path)
+        color_out = base + '_color' + ext
+        save_colorized_labels(labels, color_out)
 
     return labels
 
