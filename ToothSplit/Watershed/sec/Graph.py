@@ -406,6 +406,20 @@ def add_largest_area_seed_to_unbranched_graph(G: nx.Graph) -> list[tuple]:
 
     return added_seed_nodes
 
+# 0スライス目、最終スライス目から見切れている歯で、かつ根管のないデータでもラベル付けできるようにする。
+# 分岐されている場合もあるので、端点スライスにある・ 2 スライス以上面積が 100 以上となっている(ノイズではない) 場合に面積最大を Seed にする?
+def add_non_branching_seed_to_edge_slices(G: nx.Graph, volume: np.ndarray, min_area: int = 100) -> list[tuple]:
+    """
+    端点スライスにある、分岐していないノードのうち、面積が min_area 以上のノードを seed とする。
+    Parameters:
+        G: nx.Graph
+        volume: 元の Volume データ
+        min_area: 面積の閾値 (ボクセル数)
+    Returns:
+        added_seed_nodes: 追加された seed ノードのリスト
+    """
+
+
 def relabeling_labels(
     G: nx.Graph,
     volume: np.ndarray,
