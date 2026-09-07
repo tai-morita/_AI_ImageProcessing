@@ -1,6 +1,5 @@
 # 根管を二値化で抽出する
 import numpy as np
-from skimage.filters import threshold_otsu
 from scipy import ndimage as ndi
 from scipy.ndimage import gaussian_filter1d
 
