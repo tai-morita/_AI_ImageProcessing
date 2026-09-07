@@ -4,8 +4,8 @@ import numpy as np
 import tifffile as tiff
 from scipy import ndimage as ndi
 from skimage import filters, morphology, segmentation, feature, util
-from .LabelColored import save_colorized_labels
-from .DataLoad import load_data, save_volume
+from LabelColored import save_colorized_labels
+from DataLoad import load_data, save_volume
 
 def watershed_3d_tiff(volume          : np.ndarray, 
                       seed_volume     : np.ndarray, 
@@ -26,7 +26,7 @@ def watershed_3d_tiff(volume          : np.ndarray,
     if seed_volume is None:
         coords = feature.peak_local_max(
             dist,
-            labels=volume > 0,
+            labels=volume != 0,
             footprint=np.ones((3, 3, 3), dtype=bool),
             exclude_border=False
         )
@@ -36,7 +36,7 @@ def watershed_3d_tiff(volume          : np.ndarray,
     labels = segmentation.watershed(
         -dist,  # 中心が谷になるように負の距離を使う
         markers=seed_volume,
-        mask=volume > 0,
+        mask=volume != 0,
         connectivity=connectivity,  # 3Dの26近傍
         watershed_line=False
     )

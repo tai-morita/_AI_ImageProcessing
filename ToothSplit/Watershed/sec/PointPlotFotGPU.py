@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 
 def load_npy_volume(path: Path) -> np.ndarray:
-	"""Load a 3D volume from .npy."""
+	"""Load a 3D volume fromnpy."""
 	if path.suffix.lower() != ".npy":
 		# .tif なら .npy に変換する
 		if path.suffix.lower() == ".tif":

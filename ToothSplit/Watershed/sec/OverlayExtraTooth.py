@@ -1,7 +1,7 @@
 # 元の Volume データに対して、歯のデータ(2 値化)だけを抽出する
 
 import numpy as np
-from .DataLoad import load_data, save_volume
+from DataLoad import load_data, save_volume
 def overlay_extra_tooth(volume: np.ndarray, extra_tooth: np.ndarray) -> np.ndarray:
     """
     元の Volume データに対して、歯のデータ(2 値化)だけを抽出する関数

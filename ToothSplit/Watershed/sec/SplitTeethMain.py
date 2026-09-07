@@ -20,14 +20,14 @@ import tifffile
 import time
 from scipy import ndimage as ndi
 
-from .DataLoad import load_data, save_volume
-from .OverlayExtraTooth import overlay_extra_tooth, ternary_image_0B1R2T
-from .ExtractionRootCanal import extract_root_canal
-from .LabeledRootCanal import labeled_for_root_canal
-from .EditRootcanalLabel import edit_root_canal
-from .WaterShedBySkimage import watershed_3d_tiff
-from .PointPlotFotGPU import load_npy_volume, volume_to_point_cloud, show_gpu_point_cloud
-from .Graph import create_seed_main
+from DataLoad import load_data, save_volume
+from OverlayExtraTooth import overlay_extra_tooth, ternary_image_0B1R2T
+from ExtractionRootCanal import extract_root_canal
+from LabeledRootCanal import labeled_for_root_canal
+from EditRootCanalLabel import edit_root_canal
+from WaterShedBySkimage import watershed_3d_tiff
+from PointPlotFotGPU import load_npy_volume, volume_to_point_cloud, show_gpu_point_cloud
+from Graph import create_seed_main
 
 def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
     """
@@ -67,3 +67,18 @@ def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
         debug_dist_path=None)
 
     return extracted_volume, edited_labeled_root_canal, splitted_teeth_volume
+
+
+def main():
+    label_number = 3
+    input_volume       = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\CTHRs_100_Label{label_number}.npy"
+    input_teeth_binary = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\Label{label_number}.npy"
+    extracted_volume, edited_labeled_root_canal, splitted_teeth_volume = SplitTeethMain(input_volume, input_teeth_binary)
+    # 結果の保存
+    output_dir = r"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\temp"
+    save_volume(os.path.join(output_dir, "extracted_volume.npy")         , extracted_volume)
+    save_volume(os.path.join(output_dir, "edited_labeled_root_canal.npy"), edited_labeled_root_canal, dtype = np.int8)
+    save_volume(os.path.join(output_dir, "splitted_teeth_volume.npy")    , splitted_teeth_volume    , dtype = np.int8)
+
+if __name__ == "__main__":
+    main()

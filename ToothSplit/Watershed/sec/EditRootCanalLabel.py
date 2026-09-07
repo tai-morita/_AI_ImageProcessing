@@ -1,6 +1,7 @@
 # Root Canal を Seed にして Watershed を実行するテスト
 import numpy as np
 from scipy import ndimage as ndi
+from LabeledRootCanal import relabel_nearby_labeled_regions
 
 def edit_root_canal(labeled_root_canal: np.ndarray, tooth_labeled_volume: np.ndarray) -> np.ndarray:
     """
@@ -49,7 +50,6 @@ def edit_root_canal(labeled_root_canal: np.ndarray, tooth_labeled_volume: np.nda
         edit_labels[edit_labels == edit_label] = 0  # 背景化
 
     # 周囲 5 ボクセルを膨張させてラベルを再付与する
-    from .LabeledRootCanal import relabel_nearby_labeled_regions
     edit_labels = relabel_nearby_labeled_regions(edit_labels, dilation_iterations=5)
 
     # 編集前と編集後のラベルとそのカウントを表示する

@@ -1,0 +1,7 @@
+matplotlib
+networkx
+numpy
+plotly
+scikit-image
+scipy
+tifffile

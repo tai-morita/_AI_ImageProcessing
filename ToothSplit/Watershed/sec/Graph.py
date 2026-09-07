@@ -28,9 +28,9 @@ import networkx as nx
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 
-from .DataLoad import load_data, save_volume
-from .LabeledRootCanal import labeled_for_root_canal
-from .EditRootcanalLabel import edit_root_canal
+from DataLoad import load_data, save_volume
+from LabeledRootCanal import labeled_for_root_canal
+from EditRootCanalLabel import edit_root_canal
 
 # direction がある場合は、上から、下から作成していき、スライス内に追加するノードがない時に終了する。
 def create_graph(volume: np.ndarray, 
