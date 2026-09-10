@@ -71,14 +71,23 @@ def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
 
 def main():
     label_number = 3
-    input_volume       = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\CTHRs_100_Label{label_number}.npy"
-    input_teeth_binary = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\Label{label_number}.npy"
-    extracted_volume, edited_labeled_root_canal, splitted_teeth_volume = SplitTeethMain(input_volume, input_teeth_binary)
+    input_volume_path       = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\CTHRs_100_Label{label_number}.npy"
+    input_teeth_binary_path = fr"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{label_number}\Label{label_number}.npy"
+    extracted_volume, edited_labeled_root_canal, splitted_teeth_volume = SplitTeethMain(input_volume_path, input_teeth_binary_path)
     # 結果の保存
     output_dir = r"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\temp"
-    save_volume(os.path.join(output_dir, "extracted_volume.npy")         , extracted_volume)
-    save_volume(os.path.join(output_dir, "edited_labeled_root_canal.npy"), edited_labeled_root_canal, dtype = np.int8)
-    save_volume(os.path.join(output_dir, "splitted_teeth_volume.npy")    , splitted_teeth_volume    , dtype = np.int8)
+    if False:
+        save_volume(os.path.join(output_dir, "extracted_volume.npy")         , extracted_volume)
+        save_volume(os.path.join(output_dir, "edited_labeled_root_canal.npy"), edited_labeled_root_canal, dtype = np.int8)
+        save_volume(os.path.join(output_dir, "splitted_teeth_volume.npy")    , splitted_teeth_volume    , dtype = np.int8)
+    if True:
+        save_volume(os.path.join(output_dir, os.path.basename(input_volume_path).replace(".npy", ".tif"))      , load_data(os.path.join(output_dir, input_volume_path))      , dtype = np.float32)
+        save_volume(os.path.join(output_dir, os.path.basename(input_teeth_binary_path).replace(".npy", ".tif")), load_data(os.path.join(output_dir, input_teeth_binary_path)), dtype = np.uint16)
+        save_volume(os.path.join(output_dir, "extracted_volume.tif")         , extracted_volume, dtype = np.uint16)
+        save_volume(os.path.join(output_dir, "edited_labeled_root_canal.tif"), edited_labeled_root_canal, dtype = np.uint16)
+        save_volume(os.path.join(output_dir, "splitted_teeth_volume.tif")    , splitted_teeth_volume, dtype = np.uint16)
+
+
 
 if __name__ == "__main__":
     main()

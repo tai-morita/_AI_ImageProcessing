@@ -411,6 +411,11 @@ def add_largest_area_seed_to_unbranched_graph(G: nx.Graph) -> list[tuple]:
 def add_non_branching_seed_to_edge_slices(G: nx.Graph, volume: np.ndarray, min_area: int = 100) -> list[tuple]:
     """
     端点スライスにある、分岐していないノードのうち、面積が min_area 以上のノードを seed とする。
+    Seed の条件:
+        - 端点スライスにあるノードであること
+        - 隣接ノード群の中に根管のラベルがないこと
+        - 隣接ノード群の中での最大の面積が min_area 以上であること
+        - ノード群が 10 スライス以上続いていること
     Parameters:
         G: nx.Graph
         volume: 元の Volume データ
@@ -418,6 +423,31 @@ def add_non_branching_seed_to_edge_slices(G: nx.Graph, volume: np.ndarray, min_a
     Returns:
         added_seed_nodes: 追加された seed ノードのリスト
     """
+    added_seed_nodes = []
+    edge_slices = [1, volume.shape[0]]  # 端点スライス番号 (1始まり)
+
+    for slice_index in edge_slices:
+        # 端点スライスのノード群
+        nodes_in_slice = [
+            node for node in G.nodes
+            if node[0] == slice_index and isinstance(node[1], (int, np.integer))
+        ]
+        # 条件を満たすノードを seed とする
+        for node in nodes_in_slice:
+            if any(G.nodes[neighbor].get("root_canal_labels", []) for neighbor in G.neighbors(node)):
+                continue  # 隣接ノード群に根管ラベルがあるノードは除外
+            if max(G.nodes[neighbor].get("area", 0) for neighbor in G.neighbors(node)) < min_area:
+                continue  # 隣接ノード群の中での最大の面積が min_area 未満のノードは除外
+            # ノード群が 10 スライス以上続いているか確認する
+            connected_component = nx.node_connected_component(G, node)
+            slice_numbers = {n[0] for n in connected_component}
+            if len(slice_numbers) < 10:
+                continue  # 10 スライス未満の場合は除外
+
+            G.nodes[node]["seed"] = True
+            added_seed_nodes.append(node)
+
+    return added_seed_nodes
 
 
 def relabeling_labels(
@@ -467,7 +497,9 @@ def find_lowest_slice_number(
         binary_volume: np.ndarray,
         smoothing_sigma: float = 2.0,
         min_distance: int = 1) -> tuple[int, np.ndarray, np.ndarray]:
-    """slice 方向の面積プロファイルから最も深い谷の slice 番号を返す。
+    """
+    上顎・下顎の境目を検出するために、
+    slice 方向の面積プロファイルから最も深い谷の slice 番号を返す。
 
     Parameters:
         binary_volume: (slice, height, width) の歯領域マスク
@@ -535,6 +567,8 @@ def create_seed_main(volume: np.ndarray, labeled_root_canal: np.ndarray, debug: 
 
     # 分岐せずに一本で続くグラフには、面積最大のノードを seed として追加する
     add_largest_area_seed_to_unbranched_graph(G)
+    # 端点スライスにある、分岐していないノードのうち、面積が min_area 以上のノードを seed とする
+    # add_non_branching_seed_to_edge_slices(G, volume, min_area=100)
 
     labeled_volume_per_slice = labeled_volume_per_slice_down + labeled_volume_per_slice_up  # 上下のグラフを統合した後も、下からのスライスラベルを使用する
 
