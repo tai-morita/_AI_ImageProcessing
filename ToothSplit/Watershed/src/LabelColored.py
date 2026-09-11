@@ -64,13 +64,8 @@ def merge_volume(axial_path, sagittal_path, coronal_path):
 
 
 if __name__ == "__main__":
-    """
-    watershed_3d_tiff(
-        input_path  = "./Data/Input/data_053.tif",
-        markers_path= "./Data/Input/mask_edited.tif",
-        labels_out  = "./Data/Output/Watershed_data_053.tif"
-    )
-    """
-    merge_volume(r"./Data/Output/Watershed_data_053.tif",
-                 r"./Data/Output/Watershed_data_053_sagittal.tif",
-                 r"./Data/Output/Watershed_data_053_coronal.tif")
+    for n in [1, 2, 3]:
+        input = f"D:\_study\_AI_ImageProcessing\ToothSplit\Watershed\data\label_{n}\splitted_teeth_volume.tif"
+        volume = tiff.imread(input)
+        output = os.path.join(os.path.dirname(input), "splitted_teeth_volume_colored.tif")
+        save_colorized_labels(volume, output)
