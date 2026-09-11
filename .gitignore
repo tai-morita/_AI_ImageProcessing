@@ -4,6 +4,8 @@ test/
 old/
 data/
 ToothSplit/venv/
+ToothFairy3*/
+資料/
 
 *.pyc
 *.tif
