@@ -10,7 +10,7 @@ class PeakLocalMin:
     ## The input volume uses `(z, y, x)` order. The search moves only to a
     ## strictly smaller finite value and excludes background voxels.
 
-    def __init__(self, volume: np.ndarray, radius: int = 3) -> None:
+    def __init__(self, volume: np.ndarray, radius: int = 20) -> None:
         ## @brief Initialize the local-minimum searcher.
         ## @param volume Numeric volume in `(z, y, x)` order.
         ## @param radius Search radius for each axis. Radius 3 gives up to
@@ -66,6 +66,7 @@ class PeakLocalMin:
 
         current_coord = (z, y, x)
         while True:
+
             z, y, x = current_coord
             z_start = max(0, z - self.radius)
             y_start = max(0, y - self.radius)
@@ -80,6 +81,7 @@ class PeakLocalMin:
             center = (z - z_start, y - y_start, x - x_start)
             neighborhood[center] = np.inf
             neighborhood[~np.isfinite(neighborhood)] = np.inf
+            neighborhood[neighborhood == 0] = np.inf
 
             neighbor_zero_count = self._neighbor_zero_count[
                 z_start:z_end, y_start:y_end, x_start:x_end
@@ -98,4 +100,5 @@ class PeakLocalMin:
             candidate_value = self.volume[candidate]
             if not np.isfinite(candidate_value) or candidate_value >= self.volume[current_coord]:
                 return current_coord
+            # print(f"Moving from {current_coord}, {self.volume[current_coord]} to {candidate}, {self.volume[candidate]}")
             current_coord = candidate
