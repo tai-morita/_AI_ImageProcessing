@@ -140,11 +140,13 @@ class VolumeViewer:
             controls, text="PeakLocalMin", command=self._find_peak_local_minimum
         )
         self.peak_button.grid(row=9, column=0, pady=2, sticky="ew")
+        self.view_reset_button = ttk.Button(controls, text="ViewReset", command=self._reset_view)
+        self.view_reset_button.grid(row=10, column=0, pady=2, sticky="ew")
         ttk.Button(controls, text="Finish", command=self._finish).grid(
-            row=10, column=0, pady=2, sticky="ew"
+            row=11, column=0, pady=2, sticky="ew"
         )
         self.status_label = ttk.Label(controls, text="Click an image point", wraplength=190)
-        self.status_label.grid(row=11, column=0, pady=(10, 0), sticky="w")
+        self.status_label.grid(row=12, column=0, pady=(10, 0), sticky="w")
 
         self.canvas.mpl_connect("button_press_event", self._on_press)
         self.canvas.mpl_connect("scroll_event", self._on_scroll)
@@ -174,6 +176,7 @@ class VolumeViewer:
         self.slice_scale.configure(state=state)
         self.register_button.configure(state=state)
         self.peak_button.configure(state=state if self.registered_coordinate is not None else "disabled")
+        self.view_reset_button.configure(state=state)
 
     def _load_data(self) -> None:
         ## @brief Open a file dialog and load a selected volume.
@@ -295,9 +298,17 @@ class VolumeViewer:
         self.axes.set_xlabel(self._horizontal_axis_label())
         self.axes.set_ylabel("z" if self.plane != "axial" else "y")
         if reset_view:
-            self.axes.set_xlim(-0.5, image.shape[1] - 0.5)
-            self.axes.set_ylim(image.shape[0] - 0.5, -0.5)
+            self._reset_view()
         self._draw_pointer()
+        self.canvas.draw_idle()
+
+    def _reset_view(self) -> None:
+        ## @brief Restore the full image extent after zooming.
+        if self.volume is None:
+            return
+        image = extract_slice(self.volume, self.plane, self.slice_index)
+        self.axes.set_xlim(-0.5, image.shape[1] - 0.5)
+        self.axes.set_ylim(image.shape[0] - 0.5, -0.5)
         self.canvas.draw_idle()
 
     def _horizontal_axis_label(self) -> str:
