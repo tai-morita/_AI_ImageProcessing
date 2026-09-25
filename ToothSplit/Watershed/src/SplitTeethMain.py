@@ -39,6 +39,7 @@ def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
         - extracted_volume         : Volume データでの歯の抽出結果
         - edited_labeled_root_canal: 編集済みのラベル付き根管画像
         - splitted_teeth_volume    : Watershed による歯の領域分割
+        - ternary_image            : 歯が 1, 根管が 2, 背景が 0 の 3 値画像
     """
     # Step1: データのインポート
     volume       = load_data(volume_file_path)
@@ -49,7 +50,7 @@ def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
 
     # Step3: Overlay 画像から、疑似 CT 値 のプロファイルから根管の閾値を決定し、二値化で根幹を抽出する
     root_canal_binary, threshold = extract_root_canal(extracted_volume)
-    # ternary_image = ternary_image_0B1R2T(extracted_volume, root_canal_binary)
+    ternary_image = ternary_image_0B1R2T(extracted_volume, root_canal_binary)
 
     # Step4: 根管を基準とした Seed を作成する
     # 元の Volume と根管に対して Connected Component Labeling を行う。
@@ -66,4 +67,4 @@ def SplitTeethMain(volume_file_path: str, teeth_binary_file_path: str):
         connectivity=26,
         debug_dist_path=None)
 
-    return extracted_volume, edited_labeled_root_canal, splitted_teeth_volume
+    return extracted_volume, edited_labeled_root_canal, splitted_teeth_volume, ternary_image
